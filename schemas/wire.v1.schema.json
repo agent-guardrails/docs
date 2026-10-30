@@ -1,0 +1,193 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/agent-guardrails/docs/main/schemas/wire.v1.schema.json",
+  "title": "opencode-shell-warden wire protocol v1",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/definitions/rpcRequest" },
+    { "$ref": "#/definitions/rpcResponse" },
+    { "$ref": "#/definitions/rpcError" },
+    { "$ref": "#/definitions/notification" }
+  ],
+  "definitions": {
+    "jsonrpc": { "const": "2.0" },
+    "rpcRequest": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "method"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/definitions/jsonrpc" },
+        "id": { "type": "integer", "minimum": 1 },
+        "method": { "enum": ["initialize", "policy/check", "ping"] },
+        "params": true
+      }
+    },
+    "rpcResponse": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "result"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/definitions/jsonrpc" },
+        "id": { "type": "integer", "minimum": 1 },
+        "result": true
+      }
+    },
+    "rpcError": {
+      "type": "object",
+      "required": ["jsonrpc", "id", "error"],
+      "properties": {
+        "jsonrpc": { "$ref": "#/definitions/jsonrpc" },
+        "id": { "type": ["integer", "null"] },
+        "error": {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": {
+              "enum": [-32700, -32600, -32601, -32602, -32000, -32001]
+            },
+            "message": { "type": "string", "maxLength": 512 },
+            "data": {
+              "type": "object",
+              "properties": { "fatal": { "type": "boolean" } }
+            }
+          }
+        }
+      }
+    },
+    "notification": {
+      "type": "object",
+      "required": ["jsonrpc", "method"],
+      "not": { "required": ["id"] },
+      "properties": {
+        "jsonrpc": { "$ref": "#/definitions/jsonrpc" },
+        "method": { "enum": ["audit/event", "cache/invalidate", "session/ended", "policy/observe"] },
+        "params": true
+      }
+    },
+    "initializeParams": {
+      "type": "object",
+      "required": ["protocolVersion", "client"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "client": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" },
+            "opencode": { "type": "string" }
+          }
+        }
+      }
+    },
+    "initializeResult": {
+      "type": "object",
+      "required": ["protocolVersion", "engine"],
+      "properties": {
+        "protocolVersion": { "const": 1 },
+        "engine": {
+          "type": "object",
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string" },
+            "version": { "type": "string" }
+          }
+        },
+        "capabilities": {
+          "type": "object",
+          "properties": {
+            "maxCommandsPerCheck": { "type": "integer", "minimum": 1 },
+            "cacheTtl": { "type": "boolean" },
+            "auditEvents": { "type": "boolean" },
+            "stages": { "type": "boolean" }
+          }
+        },
+        "config": {
+          "type": "object",
+          "properties": {
+            "source": { "type": "string" },
+            "stages": { "type": "array", "items": { "type": "string" } },
+            "loadedAt": { "type": "string" }
+          }
+        }
+      }
+    },
+    "checkParams": {
+      "type": "object",
+      "required": ["invocation", "action", "commands"],
+      "properties": {
+        "invocation": {
+          "type": "object",
+          "required": ["id", "sessionID", "hook"],
+          "properties": {
+            "id": { "type": "string", "maxLength": 256 },
+            "sessionID": { "type": "string" },
+            "agent": { "type": "string" },
+            "hook": { "enum": ["permission.evaluate", "shell.create.before"] },
+            "projectDir": { "type": "string" },
+            "startedAt": { "type": "string" }
+          }
+        },
+        "action": { "type": "string", "maxLength": 64 },
+        "commands": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 128,
+          "items": {
+            "type": "object",
+            "required": ["index", "raw", "cwd"],
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "raw": { "type": "string", "maxLength": 8192 },
+              "argv": { "type": "array", "items": { "type": "string" } },
+              "cwd": { "type": "string" }
+            }
+          }
+        },
+        "context": {
+          "type": "object",
+          "properties": {
+            "source": {
+              "type": "object",
+              "properties": {
+                "type": { "const": "tool" },
+                "messageID": { "type": "string" },
+                "id": { "type": "string" }
+              }
+            },
+            "metadata": { "type": "object" }
+          }
+        }
+      }
+    },
+    "checkResult": {
+      "type": "object",
+      "required": ["invocationId", "verdict"],
+      "properties": {
+        "invocationId": { "type": "string" },
+        "verdict": { "$ref": "#/definitions/verdict" },
+        "message": { "type": "string", "maxLength": 512 },
+        "commands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["index", "verdict"],
+            "properties": {
+              "index": { "type": "integer", "minimum": 0 },
+              "verdict": { "$ref": "#/definitions/verdict" },
+              "stage": { "type": ["string", "null"] },
+              "ruleId": { "type": ["string", "null"] },
+              "reason": { "type": "string", "maxLength": 256 },
+              "classification": { "enum": ["static", "opaque"] },
+              "cacheTtlMs": { "type": "integer", "minimum": 0 },
+              "facts": { "type": "object" }
+            }
+          }
+        },
+        "engine": {
+          "type": "object",
+          "properties": { "checkMs": { "type": "number", "minimum": 0 } }
+        }
+      }
+    },
+    "verdict": { "enum": ["allow", "ask", "deny"] }
+  }
+}
