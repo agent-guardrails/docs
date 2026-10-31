@@ -5,69 +5,70 @@ Implementation: stage tool for the shell-warden engine (ADR-0008). Not a hook pl
 
 ## 1. Positioning
 
-`warden-legible` — **format gate, not threat detector.** Он гарантирует, что до
-человеческого ревью и до исполнения доходят команды в конвенционально читаемой
-форме. Он не судит об опасности: «закодированная строка опасна или норма» — не
-его вопрос (решают warden-правила и человек).
+`warden-legible` — a **format gate, not a threat detector.** It guarantees that
+commands reach human review — and execution — in conventionally readable form.
+It does not judge danger: "is this encoded string dangerous or normal" is not
+its question (warden rules and the human answer that).
 
-Ключевые решения (зафиксированы в обсуждении, 2026-10):
+Key decisions (from the 2026-10 design discussion):
 
-| Решение | Следствие |
+| Decision | Consequence |
 |---|---|
-| Gate, а не display-rewrite | Нечитаемое → deny + рекомендации агенту. Никакой «читаемой версии» в промпте — человек видит ровно то, что исполнится (устраняет маскировку) |
-| Structural rules only | Правила — синтаксические конструкции с ~нулевым FP. Никаких эвристик «похоже на payload», никакой семантики |
-| Review-path only (`voteOn: "ask"`) | Warden-allow ⇒ legible молчит: политики автоматизировали доверие — формат-гейт не пересматривает его. Enforce только на пути к ревью |
-| Bounded rejection (ADR-0010) | Бюджет отказов → suspension to ask: токен-lуп невозможен |
+| Gate, not display-rewrite | Unreadable → deny + recommendations to the agent. No "readable version" in the prompt — the human sees exactly what will execute (eliminates masking) |
+| Structural rules only | Rules are syntactic constructs with ~zero false positives. No "looks like a payload" heuristics, no semantics |
+| Review-path only (`voteOn: "ask"`) | Warden-allow ⇒ legible stays silent: policies automated the trust — the format gate does not re-litigate it. Enforcement only on the path to review |
+| Bounded rejection (ADR-0010) | Rejection budget → suspension to ask: a token loop is impossible |
 
-## 2. Что legible НЕ делает
+## 2. What legible does NOT do
 
-- Не декодирует base64/hex и не судит, опасна ли закодированная строка.
-- Не раскрывает значения `$VAR` — команды с подстановками классифицирует.
-- Не является защитой от целенаправленного обхода: структурно-чистая обфускация
-  (`openssl enc`, обфускация внутри видимой трубы) проходит — безопасность such
-  команд остаётся за warden-правилами, нативным scanner'ом и человеком.
-- Не блокирует после человеческого аппрува.
+- Does not decode base64/hex and does not judge whether an encoded string is
+  dangerous.
+- Does not resolve `$VAR` values — commands with substitutions are classified.
+- Is not protection against deliberate evasion: structurally clean obfuscation
+  (`openssl enc`, obfuscation inside a visible pipe) passes — the safety of
+  such commands remains with warden rules, the native scanner, and the human.
+- Does not block after a human approval.
 
-## 3. Правила читаемости (лестница)
+## 3. Readability rules (the ladder)
 
-| Уровень | Правило | FP-риск | Default |
+| Level | Rule | FP risk | Default |
 |---|---|---|---|
-| **L1** | Script-in-script: `eval`, `bash -c`, `sh -c`, `zsh -c`, heredoc → интерпретатор | Низкий (конструкция, не содержание) | **включён** |
-| **L2** | Цепочки длиннее N сегментов (`&&`/`;`/`\|\|`), N default 4 | ~нулевой при N=4 | opt-in |
-| **L3** | Подстановки `$(...)`, backticks | Высокий (идиоматика) | **выключен** |
+| **L1** | Script-in-script: `eval`, `bash -c`, `sh -c`, `zsh -c`, heredoc → interpreter | Low (construct, not content) | **on** |
+| **L2** | Chains longer than N segments (`&&`/`;`/`\|\|`), N default 4 | ~zero at N=4 | opt-in |
+| **L3** | Substitutions `$(...)`, backticks | High (idiomatic) | **off** |
 
-Parser failure / нераспознанная конструкция → **ask** (никогда deny, никогда
-allow): наша ошибка не должна наказывать агента отказом, но и не должна
-пропускать молча.
+Parser failure / unrecognized construct → **ask** (never deny, never allow):
+our error must not punish the agent with a denial, but must not silently pass
+either.
 
 ## 4. Rejection budget → suspension to ask (ADR-0010)
 
 ```
-1..maxRejections: DENY + прескриптивная рекомендация («вызывай напрямую, без bash -c»)
-бюджет исчерпан:  стадия bypass для сессии → команды идут человеку (ask)
-успешный проход:  счётчик сброшен, гейт снова активен
+1..maxRejections: DENY + prescriptive recommendation ("call it directly, without bash -c")
+budget exhausted:  the stage is bypassed for the session → commands go to the human (ask)
+successful pass:   counter reset, the gate is active again
 ```
 
-Никогда auto-allow. Suspension notice добавляется к первому сообщению после
-байпаса.
+Never auto-allow. The suspension notice is added to the first message after
+the bypass.
 
-## 5. Контракт (как stage tool)
+## 5. Contract (as a stage tool)
 
 ```jsonc
 { "id": "legible", "type": "tool",
   "tool": { "command": ["/usr/local/bin/warden-legible"], "lifecycle": "persistent",
             "timeoutMs": 1000, "onError": "ask" },
-  "voteOn": "ask",               // ← не мешает policy-доверию (§1)
-  "messageMode": "append",               // причины append; первый deny останавливает walk
+  "voteOn": "ask",               // ← does not re-litigate policy trust (§1)
+  "messageMode": "append",       // reasons append; the first deny stops the walk
   "budget": { "maxRejections": 3, "windowMs": 1800000 } }
 ```
 
-Ответ: `{ "verdict": "deny", "message": "L1: call commands directly, without bash -c",
+Response: `{ "verdict": "deny", "message": "L1: call commands directly, without bash -c",
 "cacheTtlMs": 0 }`.
 
-## 6. Границы честности
+## 6. Honesty boundaries
 
-- Структурно-чистая обфускация (`base64 -d` в видимой трубе) проходит — и
-  должна: человек видит плоскую команду и решает сам.
-- Оценка «опасности» — warden + нативный scanner + человек; legible отвечает
-  только за форму.
+- Structurally clean obfuscation (`base64 -d` in a visible pipe) passes — and
+  must: the human sees the flat command and decides.
+- "Danger" assessment — warden + the native scanner + the human; legible is
+  responsible only for form.

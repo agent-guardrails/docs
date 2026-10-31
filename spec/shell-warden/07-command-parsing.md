@@ -15,8 +15,7 @@ Per invocation the tool receives on stdin (06 §6.4.2):
 { "protocolVersion": 1,
   "command": { "raw": "curl -s api.example.com", "cwd": "/work/repo" },
   "session": { "id": "ses_…", "agent": "build" },
-  "mcp": [ { "name": "http", "status": "connected" } ],
-  "hostEnv": { } }
+  "mcp": [ { "name": "http", "status": "connected" } ] }
 ```
 
 - `command.raw` — command text exactly as OpenCode produced it. The native
@@ -24,9 +23,10 @@ Per invocation the tool receives on stdin (06 §6.4.2):
   refuses to execute what it cannot analyze — but **re-parse defensively**:
   never assume the split is complete.
 - `command.cwd` — session working directory.
-- `hostEnv` — only the allowlisted server variables (default: empty). This is
-  host-session context, **not** the environment the command will execute with —
-  that is unknowable at decision time by design.
+- Host-session context (e.g., `CI`) reaches the tool through its **inherited
+  process environment** (`tool.env` patch + chain inheritance, 06 §6.4.1) —
+  there is no separate data channel, and the environment the command will
+  execute with is unknowable at decision time by design.
 
 ## 7.2 Classification: `static` vs `opaque`
 

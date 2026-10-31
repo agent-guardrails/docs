@@ -34,13 +34,13 @@ restart as needed); invalid → last-good stays active, violation counted.
     "action": "ask"                   // aggregate verdict when no stage decided
   },
   "limits": {
-    "stages": 64,                     // hard cap (fail-closed против кривых конфигов)
+    "stages": 64,                     // hard cap (fail-closed against broken configs)
     "configBytes": 262144,
     "factsBytes": 16384,
     "factsDepth": 8,
     "maxConcurrentTools": 16          // cap on persistent tool processes
   },
-  "stages": [ /* §6.3 — REQUIRED, ordered; порядок массива = порядок исполнения */ ]
+  "stages": [ /* §6.3 — REQUIRED, ordered; array position = execution order */ ]
 }
 ```
 
@@ -51,40 +51,42 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
 
 ```jsonc
 {
-  "id": "route-api",                   // REQUIRED, ^[a-z][a-z0-9-]{0,31}$, уникален
+  "id": "route-api",                   // REQUIRED, ^[a-z][a-z0-9-]{0,31}$, unique
 
-  "tool": { /* §6.4 — REQUIRED: контракт вызова инструмента */ },
+  "tool": { /* §6.4 — REQUIRED: tool invocation contract */ },
 
   "messageMode": "append",             // "append" | "replace" (default "append")
-                                       //   policy-стадии:  "append"  (причина дополняет)
-                                       //   format-стадии:  "append"  (обычно standalone)
-                                       //   redirect-стадии: "replace" (инструкция-замена)
-                                       //   Первый deny останавливает walk (ADR-0012)
+                                       //   policy stages:   "append"  (reason adds context)
+                                       //   format stages:   "append"  (usually standalone)
+                                       //   redirect stages: "replace" (instruction replaces)
+                                       //   The first deny stops the walk (ADR-0012)
 
-  "voteOn": "always",               // "always" | "ask" (default "always")
-                                       //   "ask": стадия исполняется только когда агрегат
-                                       //   = ask (команда идёт на человеческое ревью). Стадия не
-                                       //   пересматривает policy-доверие: allow = автоматическое
-                                       //   доверие, формат-гейт не мешает (ADR-0007).
-                                       //   Рекомендация: format-стадии → "ask",
+  "voteOn": "always",                  // "always" | "ask" (default "always")
+                                       //   "ask": the stage runs only when the aggregate
+                                       //   is ask (the command is heading to human review).
+                                       //   The stage never re-litigates policy trust:
+                                       //   allow = automated trust, the format gate does
+                                       //   not interfere (ADR-0007).
+                                       //   Recommendation: format stages → "ask",
                                        //   redirect/policy → "always".
 
-  "exclusive": false,                  // ненулевой вердикт стадии → поздние стадии НЕ вызываются
-                                       //   (redirect-поглощение: сам инструмент решает свою
-                                       //    релевантность; noop-ответ изъятия не делает)
-  "passive": false,                    // audit-only: инструмент вызывается, его вердикт
-                                       //   не влияет на агрегат
+  "exclusive": false,                  // a non-noop stage verdict → later stages are
+                                       //   NOT invoked (redirect absorption: the tool
+                                       //   decides its own relevance; a noop response
+                                       //   does not claim)
+  "passive": false,                    // audit-only: the tool is invoked, its verdict
+                                       //   does not affect the aggregate
 
-  "budget": {                          // опц. (§6.6): обычно для deny-с-рекомендацией стадий
-    "maxRejections": 3,
+  "budget": {                          // optional (§6.6): typically for deny-with-
+    "maxRejections": 3,                //   recommendation stages
     "windowMs": 1800000
   },
-  "enabled": true                      // профили: выключить стадию без удаления
+  "enabled": true                      // profiles: disable a stage without removing it
 }
 ```
 
-**Порядок исполнения = позиция в массиве.** Числовых приоритетов нет;
-`family`/`kind`/`scope` как поля схемы не существуют — см. ADR-0008.
+**Execution order = array position.** No numeric priorities; `family`/`kind`/
+`scope` do not exist as schema fields — see ADR-0008.
 
 ## 6.4 Tool invocation contract
 
@@ -92,49 +94,49 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
 
 ```jsonc
 "tool": {
-  // ── что запускать ──
+  // ── what to run ──
   "command": ["/usr/local/bin/warden-route", "--family=routing"],
-      // REQUIRED. Абсолютный argv[0], без shell. Отдельные argv-члены поддерживают
-      // {env:NAME} (резолв из окружения движка при загрузке конфига); после
-      // раскрытия argv[0] обязан остаться абсолютным. Настройки инструмента —
-      // через argv или его собственный конфиг-файл.
+      // REQUIRED. Absolute argv[0], no shell. Individual argv members support
+      // {env:NAME} (resolved from the engine's environment at config load);
+      // after expansion argv[0] must remain absolute. Tool settings go through
+      // argv or the tool's own config file.
   "cwd": "/var/lib/warden",            // default: engine state dir
 
-  // ── окружение процесса (наследование + override + подстановки) ──
+  // ── process environment (inheritance + override + substitution) ──
   "env": {
-    "WARDEN_MODE": "strict",               // литерал: установить / переопределить
-    "WARDEN_TOKEN": "{env:GITHUB_TOKEN}",  // {env:NAME}: резолв из окружения движка
-    "GITHUB_TOKEN": null                   // null = убрать из наследуемого
+    "WARDEN_MODE": "strict",               // literal: set / override
+    "WARDEN_TOKEN": "{env:GITHUB_TOKEN}",  // {env:NAME}: resolved from the engine's env
+    "GITHUB_TOKEN": null                   // null = remove from the inherited set
   },
-  // Итог = наследуемое окружение цепочки (сервер → движок → стадия) + этот патч.
-  // {env:NAME} резолвится при загрузке конфига из окружения процесса движка
-  // (= унаследованный хост-env); unset → config invalid (fail-closed).
-  // С учётом наследования это алиасинг/явная фиксация, а не канал доступа:
-  // переменная и так доходит до инструмента по цепочке.
+  // Result = the environment inherited along the chain (server → engine → stage)
+  // + this patch. {env:NAME} is resolved at config load from the engine process
+  // environment (= the inherited host env); unset → config invalid (fail-closed).
+  // Given full inheritance this is aliasing/explicit pinning, not an access
+  // channel: the variable already reaches the tool through the chain.
 
   // ── lifecycle ──
   "lifecycle": "persistent",           // "persistent" (default) | "spawn"
-  "idleTimeoutMs": 300000,             // persistent: убить процесс при простое
+  "idleTimeoutMs": 300000,             // persistent: kill the process when idle
 
-  // ── границы вызова ──
-  "timeoutMs": 1000,                   // 1..30000 — дедлайн одного вызова
+  // ── invocation bounds ──
+  "timeoutMs": 1000,                   // 1..30000 — deadline for a single call
   "killGraceMs": 250,                  // SIGTERM → SIGKILL
-  "maxOutputBytes": 65536,             // превышение = protocol violation
+  "maxOutputBytes": 65536,             // exceeding = protocol violation
 
-  // ── что передавать в stdin ──
+  // ── what goes to stdin ──
   "input": {
     "session": { "id": true, "agent": true },
-    "mcp": true                        // список подключённых MCP-серверов (для routing)
-  },                                   // command/cwd входят всегда (§6.4.2)
+    "mcp": true                        // list of connected MCP servers (for routing)
+  },                                   // command/cwd are always included (§6.4.2)
 
-  // ── вердикт ──
-  "onError": "ask",                    // "skip" | "ask" | "deny" — НИКОГДА "allow" (I3):
-                                       //   крах, таймаут, мусор, нечитаемый вывод
-  "sha256": "…"                        // опц. пин бинарника; mismatch = fatal (I8)
+  // ── verdict ──
+  "onError": "ask",                    // "skip" | "ask" | "deny" — NEVER "allow" (I3):
+                                       //   crash, timeout, garbage, unreadable output
+  "sha256": "…"                        // optional binary pin; mismatch = fatal (I8)
 }
 ```
 
-### 6.4.2 Request (stdin, одна строка JSON)
+### 6.4.2 Request (stdin, single JSON line)
 
 ```json
 { "protocolVersion": 1,
@@ -143,12 +145,12 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
   "mcp": [ { "name": "http", "status": "connected" } ] }
 ```
 
-Состав фиксируется протоколом и не настраивается per-stage: `command` и `cwd`
-нужны любому решателю; `session` — для per-session состояния (budget);
-`mcp` — для routing-инструментов. Никаких секретов в запросе нет по
-построению (I6).
+The composition is fixed by the protocol and not configurable per-stage:
+`command` and `cwd` are needed by any decider; `session` — for per-session
+state (budget); `mcp` — for routing tools. The request contains no secrets by
+construction (I6).
 
-### 6.4.3 Response (stdout, одна строка JSON)
+### 6.4.3 Response (stdout, single JSON line)
 
 ```json
 { "verdict": "deny",
@@ -156,83 +158,87 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
   "cacheTtlMs": 0 }
 ```
 
-- `verdict` ∈ `allow | ask | deny` — REQUIRED. Единственный формат: pass/fail
-  режимов нет (инструмент сам владеет своим маппингом через собственный конфиг).
-- `message` ≤ 512 символов; попадает в итоговое сообщение отказа/промпта
-  согласно `messageMode` стадии.
-- `cacheTtlMs` — только для pass-вердиктов (I9: deny не кэшируется).
-- Пустая строка = «стадия не голосует».
+- `verdict` ∈ `allow | ask | deny` — REQUIRED. The only format: there are no
+  pass/fail modes (the tool owns its mapping via its own config).
+- `message` ≤ 512 chars; goes into the final denial/prompt message according to
+  the stage's `messageMode`.
+- `cacheTtlMs` — pass-verdicts only (I9: denies are not cached).
+- An empty string = "the stage does not vote".
 
 ### 6.4.4 Outcome classification
 
-| Исход вызова | Классификация |
+| Invocation outcome | Classification |
 |---|---|
-| Валидный JSON с `verdict` | verdict стадии |
-| Exit ≠ 0 — даже с валидным JSON | **onError** (инструмент сам заявил об ошибке) |
-| Timeout / kill / crash (persistent) | **onError** + violation-счётчик (рестарты) |
-| Oversize / нечитаемый вывод / чужой `protocolVersion` / нет ответа | **onError** + violation |
+| Valid JSON with `verdict` | the stage's verdict |
+| Exit ≠ 0 — even with valid JSON | **onError** (the tool reported its own failure) |
+| Timeout / kill / crash (persistent) | **onError** + violation counter (restarts) |
+| Oversize / unreadable output / foreign `protocolVersion` / no answer | **onError** + violation |
 | Spawn failure (ENOENT) | **onError** + violation |
 
-`onError ∈ { skip, ask, deny }` — никогда `allow` (I3). Нарастание violations
-ведёт к рестарту пула инструмента; лестница — как в 02-protocol §2.7.
+`onError ∈ { skip, ask, deny }` — never `allow` (I3). Rising violations lead to
+a tool pool restart; the ladder is as in 02-protocol §2.7.
 
 ## 6.5 Stage walk & aggregation
 
 ```
 verdict = defaults.action; message = ∅; owned = true
-for stage of stages (порядок массива):
+for stage of stages (array order):
     if !stage.enabled:                                          continue
-    if stage.voteOn == "ask" and verdict != "ask":      continue
-    if !owned:                                                  continue   # exclusive-изъятие
+    if stage.voteOn == "ask" and verdict != "ask":              continue
+    if !owned:                                                  continue   # exclusive claim
     outcome = invoke(stage.tool, command, deadline)             # §6.4
-    if outcome == onError:      outcome = stage.onError-политика
+    if outcome == onError:      outcome = stage.onError policy
     if outcome.message:
         if stage.messageMode == "replace":  message = outcome.message
         else:                               message = compose(message, outcome.message)
     verdict = mostRestrictive(verdict, outcome.action)
-    if verdict == "deny":                       break   # первый deny останавливает walk (ADR-0012)
-    if stage.exclusive and outcome != noop:     owned = false   # поздние стадии не вызываются
+    if verdict == "deny":                       break   # the first deny stops the walk (ADR-0012)
+    if stage.exclusive and outcome != noop:     owned = false   # later stages are not invoked
 ```
 
-- **Вердикт** — most-restrictive (`deny > ask > allow`); инвариантен к порядку.
-- **Сообщение** — `replace` побеждает независимо от позиции; `append` дополняет
-  (`existing — reason`); `skip` молчит при чужом deny. Порядконезависимо.
-- **Управление вызовом**: `exclusive` изымает команду из поздних стадий после
-  ненулевого ответа; `passive` — audit-only; `voteOn: "ask"` — стадия
-  не пересматривает policy-allow. `terminal` как отдельный флаг не нужен:
-  в tool-модели инструмент всегда отвечает вердиктом, различие
-  «сматчил/не сматчил» отсутствует — `exclusive` покрывает оба случая.
-- **Рекомендуемый порядок**: redirect-стадии (exclusive) → format-стадии
-  (voteOn: ask, messageMode: append) → policy-стадии (append).
+- **Verdict** — most-restrictive (`deny > ask > allow`); order-independent.
+- **Message** — `replace` wins regardless of position; `append` adds
+  (`existing — reason`); `skip` stays silent on a foreign deny.
+  Order-independent.
+- **Invocation control**: `exclusive` removes the command from later stages
+  after a non-noop response; `passive` — audit-only; `voteOn: "ask"` — the
+  stage never re-litigates a policy allow. A separate `terminal` flag is not
+  needed: in the tool model the tool always answers with a verdict, there is
+  no "matched/did not match" distinction — `exclusive` covers both cases.
+- **Recommended order**: redirect stages (exclusive) → format stages
+  (voteOn: ask, messageMode: append) → policy stages (append).
 
 ## 6.6 Rejection budget (ADR-0010)
 
-Стадия с `budget` (обычно deny-с-рекомендацией: format, redirect) не может
-отказывать агенту бесконечно:
+A stage with a `budget` (typically deny-with-recommendation: format, redirect)
+cannot deny the agent forever:
 
-- Движок считает deny-вердикты стадии на `(stage, sessionID)` в окне `windowMs`.
-- Исчерпание `maxRejections` ⇒ стадия временно выводится из walk'а для этой
-  сессии (skip); в первый пропуск добавляется notice:
+- The engine counts the stage's deny verdicts per `(stage, sessionID)` within
+  `windowMs`.
+- Exhausting `maxRejections` ⇒ the stage is temporarily removed from the walk
+  for that session (skip); the first bypass adds a notice:
   `[<id>] suspended for this session after N rejections — commands will be reviewed manually`.
-- Сброс: стадия выдала не-deny вердикт для этой сессии, либо окно истекло.
-- Suspension переводит команды **человеку** (ask-путь), никогда auto-allow.
+- Reset: the stage produced a non-deny verdict for that session, or the window
+  expired.
+- Suspension hands commands to **the human** (ask path), never auto-allow.
 
 ## 6.7 Reference tools
 
-| Tool | Семейство | Спецификация |
+| Tool | Family | Specification |
 |---|---|---|
-| `warden-match` | declarative matching (rule-file → вердикт) | `07-command-parsing.md` (guidance,.normative для reference) |
+| `warden-match` | declarative matching (rule-file → verdict) | `07-command-parsing.md` (guidance; normative for the reference) |
 | `warden-legible` | readability gate (L1/L2/L3 + rejection budget) | `design/shell-legible-gate.md` |
 
-Оба — обычные stage tools; в ядре нет ни строчки их логики.
+Both are ordinary stage tools; the core contains none of their logic.
 
 ## 6.8 Profiles
 
-Включение/выключение семей — флагами `enabled` стадий:
+Enabling/disabling families — via the `enabled` flags of stages:
 
 ```jsonc
-// readability-only профиль: policy-стадии выключены
+// readability-only profile: policy stages disabled
 { "id": "s1", "enabled": false }, { "id": "legible", "enabled": true }
 ```
 
-Профиль = состояние конфига; переключение = правка файла (reload on save).
+A profile = a state of the config; switching = editing the file (reload on
+save).

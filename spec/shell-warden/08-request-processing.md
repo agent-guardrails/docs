@@ -13,12 +13,12 @@ validate(request)                          → -32602 on schema violation
 for each stage, in config array order:
     if !stage.enabled:                     continue
     if stage.voteOn == "ask" and verdict != "ask":
-                                           continue   # не пересматриваем policy-доверие
+                                           continue   # never re-litigate policy allow
     ensure tool (persistent pool or spawn) — supervisor, deadlines
     outcome = invoke(stage.tool, request, deadline)        # 06 §6.4
     classify(outcome)                      → onError-policy or (verdict, message)
-    if verdict == deny:                    break     # первый deny останавливает walk (ADR-0012)
-    if stage.exclusive:                    break     # ненулевой вердикт — поздние не вызываются
+    if verdict == deny:                    break     # the first deny stops the walk (ADR-0012)
+    if stage.exclusive:                    break     # a non-noop verdict — later stages not invoked
 aggregate(outcomes)                        → most-restrictive-wins + message per §8.3
 audit(...) + respond(result)               → 06 §6.4.3 response shape
 ```
@@ -33,11 +33,11 @@ audit(...) + respond(result)               → 06 §6.4.3 response shape
    is restarting (then remaining stages still run — each stage fails
    independently; one broken tool must not disable the others).
 
-## 8.3 Aggregation
+## 8.3 Aggregation and message composition
 
 | Combination | Aggregate |
 |---|---|
-| any `deny` | `deny` |
+| any `deny` | `deny` — **the walk has already stopped at it** |
 | else any `ask` (incl. defaults/`onError`) | `ask` |
 | else all `allow` (≥ 1 contributing stage) | `allow` |
 | no stage contributed | `defaults.action` (top-level `defaults.action`, default `ask`) |
@@ -49,12 +49,9 @@ audit(...) + respond(result)               → 06 §6.4.3 response shape
 | `append` (policy/format default) | `message = compose(message, reason)` — `existing — reason` |
 | `replace` (redirect-family) | `message = stage reason` — replaces everything accumulated |
 
-Walk rule: **the first `deny` stops the walk** — later stages are not invoked,
-and the denying stage's reason is the message. Together with `messageMode`
-this replaces the v1.0 `skip` verb (ADR-0012).
-
-Order-independence: with these three verbs the final message is identical for
-any plugin/stage ordering (verified cases in `adr/0009`).
+Since the walk stops at the first deny, there is never a contested
+"two deny reasons" case; `messageMode` differentiates behavior only on the
+ask path and for replacing stages.
 
 ## 8.4 Rejection budget (per stage, per session)
 
@@ -78,7 +75,7 @@ async function check(req: CheckParams, deadline: Deadline): Promise<CheckResult>
     verdict = mostRestrictive(verdict, o.action)
     message = composeMessage(message, o, stage.messageMode)
     budget.charge(stage, o, req.invocation)
-    if (verdict === "deny") break                  // первый deny останавливает walk (ADR-0012)
+    if (verdict === "deny") break                  // the first deny stops the walk (ADR-0012)
   }
   audit({ verdict, message, req })
   return { invocationId: req.invocation.id, verdict, message, engine: { checkMs: elapsed() } }
