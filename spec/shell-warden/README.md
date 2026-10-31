@@ -1,9 +1,11 @@
 # shell-warden — Specification Set
 
-Spec v0.1 · Status: shim M0/M1 implemented (`agent-guardrails/opencode-shell-warden-hook`)
+Spec v1.1 · Status: shim M0/M1 implemented (`agent-guardrails/opencode-shell-warden-hook`);
+engine config re-specified as **tool-first stages** (06/07/08 — v1.1; ADR-0008)
 
-A two-component permission system for OpenCode V2: a **thin plugin shim** and a powerful **policy engine**
-(`shell-warden`) communicating over NDJSON JSON-RPC 2.0 on stdio.
+A two-component permission system for OpenCode V2: a **thin plugin shim** and an **orchestrator engine**
+(`shell-warden`) communicating over NDJSON JSON-RPC 2.0 on stdio. All decision logic lives in
+**stage tools**; the core walks stages and aggregates verdicts.
 
 ## Documents by domain
 
@@ -14,13 +16,14 @@ A two-component permission system for OpenCode V2: a **thin plugin shim** and a 
 | `03-shim.md` | plugin | hook registrations, verdict application, supervision |
 | `04-shim-config.md` | plugin config | `opencode.jsonc` plugin options schema |
 | `05-engine-runtime.md` | backend runtime | process contract, stdio discipline, reload, termination |
-| `06-engine-config.md` | backend config | **`shell-warden.jsonc` format: stages, rules, examples** |
-| `07-command-parsing.md` | backend parsing | **command normalization, tokenization, patterns, flags, opaque handling** |
-| `08-request-processing.md` | backend logic | **`policy/check` pipeline: classify → stage walk → aggregate** |
+| `06-engine-config.md` | backend config | **v1.1 tool-first: stage = external tool invocation; no rule grammar in core** |
+| `07-command-parsing.md` | parsing guidance | **recommendations for stage-tool authors: classification, normalization, patterns, opaque handling** |
+| `08-request-processing.md` | backend logic | **stage walk: invocation, aggregation, message composition, budgets** |
 | `09-security.md` | security | invariants, threat model, fail-closed matrix |
 | `10-testing.md` | quality | contract, golden, integration suites |
 | `11-roadmap.md` | delivery | milestones, open questions |
-| `../../schemas/*.json` | machine | JSON Schema drafts for wire v1 and config v1 |
+| `../../design/shell-legible-gate.md` | design | readability gate reference tool (L1–L3, budget) |
+| `../../schemas/*.json` | machine | JSON Schema drafts: wire v1, engine config v1.1 |
 
 ## Reading order
 
@@ -33,6 +36,7 @@ A two-component permission system for OpenCode V2: a **thin plugin shim** and a 
 ## Conventions
 
 - Normative keywords MUST / SHOULD / MAY per RFC 2119.
-- **Shim** = OpenCode V2 plugin part (`@opencode/plugin`, in-process). **Engine** = `shell-warden` child process.
+- **Shim** = OpenCode V2 plugin part (`@opencode/plugin`, in-process). **Engine** = `shell-warden` orchestrator process. **Stage tool** = external program invoked by the engine for one stage.
 - All durations are integer milliseconds. All budget clamps are enforced with warn+clamp, never silently.
 - Spec changes: bump the doc version and the relevant `protocolVersion` / config `version`.
+- Revision status: 02, 04, 06, 07, 08 = v1.1 (tool-first). 03, 05, 09, 10, 11 — minor revision pending (v1.0 wording).

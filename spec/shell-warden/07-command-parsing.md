@@ -1,124 +1,82 @@
-# 07 — Command Parsing (Engine Domain)
+# 07 — Parsing: Guidance for Stage-Tool Authors
 
-Version 0.1 · 2026-10-30
+Version 1.1 · 2026-10-31
+
+Since v1.1 the engine core does **no command parsing** (ADR-0008). Every stage
+tool receives the raw command and parses it itself. This document is guidance:
+**normative for the reference tools** (`warden-match`, `warden-legible`),
+recommended for third-party tools.
 
 ## 7.1 Input contract
 
-For each `policy/check` the engine receives `commands[].raw` — the command text as OpenCode produced it — plus
-`cwd`. OpenCode's native shell scanner has already split compound commands into subcommands across Bash/Zsh/sh/
-PowerShell and refuses to execute what it cannot analyze (it returns a scanner error instead of running unverified
-subcommands). The engine MUST still **re-parse defensively**: never assume the split is complete. Any operator
-(`|`, `||`, `&&`, `;`, `&`, newline) or substitution remaining in `raw` classifies the whole command `opaque`
-(defense in depth, §7.7).
+Per invocation the tool receives on stdin (06 §6.4.2):
 
-## 7.2 Classification — `static` vs `opaque`
-
-Every command element is classified before rule matching:
-
-| Class | Meaning | Examples |
-|---|---|---|
-| `static` | fully analyzable after normalization: literal tokens, wholly-static quoting, no expansions | `git push origin main`, `docker run -v /data:/data alpine` |
-| `opaque` | contains constructs the engine refuses to resolve | `echo $(whoami)`, `` git commit -m "`date`" ``, `rm $TARGET`, `git push "$BRANCH"`, `cat f_* | xargs rm` |
-
-**Normative rule (fail-closed matching):** an `allow` verdict may originate ONLY from a rule matched against a
-`static` command. `deny`/`ask` rules MAY match any classification. Concretely: `when` conditions of an
-`action: "allow"` rule are evaluated only if `classification === "static"`; on `opaque` they are treated as
-non-matching, and the walk continues (eventually reaching `defaults.action` = ask). An allow rule may make this
-explicit with `"when": { "classification": "static", ... }`.
-
-## 7.3 Normalization pipeline
-
-Applied in order; each step feeds the next. Steps 4–6 produce the classification.
-
-1. **Encoding**: UTF-8, Unicode NFC.
-2. **Whitespace**: trim; collapse runs of whitespace outside quotes to single spaces.
-3. **Quote decoding**: decode *wholly-static* quoting only — `'…'` and `"…"` whose contents contain no expansions
-   (bash-guard heritage: "decodes wholly static quoting"). Records the original span for audit.
-4. **Expansion scan** — any of the following marks the command `opaque`:
-   `$(`, backtick, `${`, `$NAME` (parameter expansion), process substitution `<(`/`)>`, arithmetic `$((`,
-   brace expansion `{a,b}`, tilde in a *command* token (tilde is allowed only inside path operands, §7.6),
-   glob metacharacters in the **command word** (position 0).
-5. **Operator scan** — any remaining operator or redirection (`|`, `&&`, `;`, `&`, newline, `>`, `>>`, `<`, `<<`,
-   `2>`, `&>`) ⇒ `opaque`. (The scanner should have split compound commands; seeing operators means the input is
-   outside the assumed contract.)
-6. **Env-prefix extraction**: leading `NAME=value` tokens are stripped from the argv sequence and recorded as
-   facts (`envAssignments`); they do not affect matching beyond audit.
-7. **Tokenization**: split on whitespace respecting the decoded quoting. Token 0 = command word; remaining = argv.
-
-Output of normalization: `{ classification, tokens[], argv[] (tokens minus command word), envAssignments[],
-redirects[] (if any ⇒ opaque), raw }`.
-
-## 7.4 Pattern semantics (`pattern` conditions and scope matchers)
-
-OpenCode-compatible whole-value glob dialect on the **raw (normalized) command string**:
-
-| Syntax | Meaning |
-|---|---|
-| `*` | zero or more characters, including spaces and `/` |
-| `?` | exactly one character |
-| other chars | literal, case-sensitive |
-| trailing `" *"` | additionally matches the command without arguments: `git status *` matches both `git status` and `git status --short` |
-
-`pattern` matching is performed against the normalized raw string (quotes decoded, whitespace collapsed).
-Escaping is not supported in v1 — a literal `*` in a command cannot be expressed; treat such rules as invalid
-config (strict mode).
-
-## 7.5 Token & flag matching
-
-Used by `argv`, `argvAt`, `flag`, `flagValue` conditions.
-
-- **`argv: ["git","push"]`** — ordered prefix match on the token sequence (token 0 = command word).
-- **`argvAt: {"1": "push"}`** — exact token at 0-based position (0 = command word).
-- **Base-flag identity** (bash-guard heritage): a token is a flag iff it starts with `-`, is neither `-` nor `--`,
-  and contains no whitespace or `=`. `--flag=value` is normalized to base flag `--flag` + inline value `value`.
-- **Arity** — stage-level `flags` declaration (`{"-m": 1}`) is authoritative for consuming the next token as a
-  value. Undeclared arity: a flag followed by a non-flag token records an *ambiguous* pair; `flagValue` conditions
-  do not match ambiguous pairs (fail-closed).
-- **`--` separator**: everything after a bare `--` is an operand; flags cannot appear after it; `flag` conditions
-  do not see them.
-- **`flag: {"--force": "present"}`** — presence/absence among declared-arity flags and inline-value normalizations.
-- **`flagValue: {"--branch": "release/*"}`** — glob (§7.4) against the resolved value: explicit `--branch=x`,
-  `--branch x` (arity 1), or inline normalization. Ambiguous ⇒ no match.
-
-## 7.6 Path conditions (`when.paths`)
-
-```jsonc
-"paths": [ { "operandIndex": 0, "within": "project", "glob": "*.env" } ]
+```json
+{ "protocolVersion": 1,
+  "command": { "raw": "curl -s api.example.com", "cwd": "/work/repo" },
+  "session": { "id": "ses_…", "agent": "build" },
+  "mcp": [ { "name": "http", "status": "connected" } ],
+  "hostEnv": { } }
 ```
 
-- `operandIndex` — 0-based index among non-flag operands (default: all operands).
-- `within`: `"cwd"` | `"project"` | `"home"` | `"any"` — the canonicalized absolute path must be inside that root.
-  `project` requires `invocation.projectDir`; commands without it cannot match `project` (fail-closed).
-- Canonicalization: `~` and `$HOME` expanded (home root only); `..` resolved lexically; backslashes → slashes.
-  **Symlinks are NOT resolved in v1** — documented limitation; `within` checks are lexical.
-- Glob: §7.4 dialect relative to the `within` root.
+- `command.raw` — command text exactly as OpenCode produced it. The native
+  OpenCode scanner has already split compound commands into subcommands and
+  refuses to execute what it cannot analyze — but **re-parse defensively**:
+  never assume the split is complete.
+- `command.cwd` — session working directory.
+- `hostEnv` — only the allowlisted server variables (default: empty). This is
+  host-session context, **not** the environment the command will execute with —
+  that is unknowable at decision time by design.
 
-## 7.7 Opaque handling
+## 7.2 Classification: `static` vs `opaque`
 
-| Aspect | Rule |
+Every command is classified before verdict production:
+
+| Class | Meaning |
 |---|---|
-| `allow` rules | never match (§7.2 — normative fail-closed) |
-| `deny` / `ask` rules | match normally (e.g., a deny-by-pattern rule still blocks `sudo $(cat cmd)` if `pattern: "sudo *"` fits) |
-| `when.classification` | explicit `"static"` or `"opaque"` condition for rules that care |
-| no rule matched | `defaults.action` (`ask` by default) — the native prompt decides |
-| response marking | `commands[].classification: "opaque"`; reason string notes the construct class (never the raw content beyond the command already visible in the prompt) |
-| engine internals | opaque commands skip tokenization-dependent conditions; pattern-on-raw conditions still evaluated |
+| `static` | Fully analyzable after normalization: literal tokens, wholly-static quoting, no expansions |
+| `opaque` | Contains constructs the tool refuses to resolve: `$(`, backticks, `${`, `$VAR`, process substitution, residual operators (`\|`, `&&`, `;`) after the scanner split |
 
-This mirrors OpenCode's own scanner philosophy: refuse to be clever about what cannot be proven; degrade to the
-human.
+**Normative rule (fail-closed matching):** an `allow` verdict may originate
+ONLY from a rule matched against a `static` command. `deny`/`ask` MAY match any
+classification. On `opaque`, allow-rules are treated as non-matching and the
+walk continues — the command degrades toward `ask`, never silently runs.
 
-## 7.8 Examples
+Rationale: the tool is fast and deterministic, not intelligent. It cannot judge
+whether an encoded string is dangerous — it only guarantees the human sees
+commands in a form they can parse at a glance.
 
-| Raw command | Class | Notes |
-|---|---|---|
-| `git push origin main` | static | tokens: `git push origin main` |
-| `git commit -m "fix typo"` | static | wholly-static quoting decoded |
-| `FOO=1 npm test` | static | env prefix extracted, `npm test` matched |
-| `git commit -m $MSG` | opaque | parameter expansion |
-| `echo $(date)` | opaque | command substitution |
-| `kubectl logs app \|\| true` | opaque | residual operator (scanner would normally split) |
-| `tar -cf backup.tar ~` | static (tilde) | tilde in operand OK; matches only path conditions after expansion |
-| `./run *` (literal asterisk arg) | static | glob char in non-command token stays literal for token matching; `pattern` globs still treat `*` as wildcard — document in rules |
-| `docker run -v /:/host alpine` | static | `flagValue { "-v": ":/:*" }` matches inline-value form |
-| `docker run -v /:/host --rm alpine` | static | same, arity-1 flag mid-argv |
+## 7.3 Normalization recommendations (for `static` classification)
 
+Light pipeline, in order; any unresolvable step ⇒ `opaque`:
+
+1. UTF-8 / NFC; trim; collapse whitespace outside quotes.
+2. Decode **wholly-static** quoting only (`'…'`, `"…"` without expansions).
+3. Expansion scan ⇒ opaque on: `$(`, backticks, `${`, `$VAR`, process
+   substitution, arithmetic `$((`, brace expansion.
+4. Operator scan ⇒ opaque on any residual `|`, `&&`, `;`, `&`, redirections
+   (the OpenCode scanner should have split these; seeing them means the input is
+   outside the assumed contract).
+5. Strip env-prefix assignments (`FOO=1 cmd` → record, exclude from argv).
+6. Tokenize on whitespace respecting decoded quoting; token 0 = command word.
+
+## 7.4 Matching vocabulary
+
+- **Glob on raw string** (OpenCode-compatible): `*` = zero+ chars incl. spaces;
+  `?` = one char; trailing `" *"` also matches the bare command
+  (`git status *` matches `git status` too).
+- **Token prefix** (`argv: ["git","push"]`): ordered equality on the first N
+  tokens of the token sequence.
+- **Flags**: base-flag identity (`-x`, `--long`, `--long=value` → base +
+  inline value); arity declared per stage/tool config; `--` terminates flags.
+- **Path conditions** (optional): lexical canonicalization only — symlinks are
+  NOT resolved (documented limitation; `within` checks are advisory for hostile
+  layouts).
+
+## 7.5 Verdict hygiene
+
+- `allow` ⇒ only `static`, only fully-analyzed constructs (I10).
+- `deny`/`ask` messages MUST be prescriptive: tell the agent what to do
+  ("call commands directly, without bash -c"), not just what failed. Budgeted
+  rejection (ADR-0010) assumes one iteration usually suffices.
+- `facts` ≤ 16 KiB, depth ≤ 8, no secrets (I6).

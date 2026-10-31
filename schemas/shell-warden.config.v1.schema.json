@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/agent-guardrails/docs/main/schemas/shell-warden.config.v1.schema.json",
-  "title": "shell-warden engine configuration v1",
+  "title": "shell-warden engine configuration v1.1 (tool-first stages)",
   "type": "object",
   "required": ["version", "stages"],
   "additionalProperties": false,
@@ -11,169 +11,88 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "action": { "enum": ["ask", "deny"], "default": "ask" },
-        "onError": { "enum": ["ask", "deny"], "default": "ask" }
+        "action": { "enum": ["ask"], "default": "ask" }
       }
     },
     "limits": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "checkBudgetMs": { "type": "integer", "minimum": 1, "maximum": 30000, "default": 4000 },
-        "factsBytes": { "type": "integer", "minimum": 1024, "maximum": 65536, "default": 16384 },
-        "factsDepth": { "type": "integer", "minimum": 1, "maximum": 16, "default": 8 },
-        "maxAuditPerMinute": { "type": "integer", "minimum": 1, "default": 600 }
-      }
-    },
-    "context": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "git": { "type": "boolean", "default": false },
-        "env": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" }, "maxItems": 32 },
-        "time": { "type": "boolean", "default": false }
+        "stages": { "type": "integer", "minimum": 1, "maximum": 64, "default": 64 },
+        "configBytes": { "type": "integer", "maximum": 262144 },
+        "factsBytes": { "type": "integer", "default": 16384 },
+        "factsDepth": { "type": "integer", "default": 8 },
+        "maxConcurrentTools": { "type": "integer", "default": 16 }
       }
     },
     "stages": {
       "type": "array",
       "minItems": 1,
-      "maxItems": 32,
+      "maxItems": 64,
       "items": { "$ref": "#/definitions/stage" }
     }
   },
   "definitions": {
     "stage": {
       "type": "object",
-      "required": ["id", "scope", "rules"],
+      "required": ["id", "type", "tool"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
-        "description": { "type": "string", "maxLength": 256 },
-        "scope": { "$ref": "#/definitions/scope" },
-        "flags": {
-          "type": "object",
-          "propertyNames": { "pattern": "^-{1,2}[A-Za-z][A-Za-z0-9-]*$" },
-          "additionalProperties": { "enum": [0, 1] }
-        },
-        "terminal": { "type": "boolean", "default": true },
+        "type": { "const": "tool" },
+        "tool": { "$ref": "#/definitions/tool" },
+        "onExistingDeny": { "enum": ["append", "skip", "replace"], "default": "append" },
+        "applyWhen": { "enum": ["always", "ask-only"], "default": "always" },
         "exclusive": { "type": "boolean", "default": false },
         "passive": { "type": "boolean", "default": false },
-        "rules": {
-          "type": "array",
-          "maxItems": 512,
-          "items": { "$ref": "#/definitions/rule" }
-        }
-      }
-    },
-    "scope": {
-      "type": "object",
-      "required": ["anyOf"],
-      "additionalProperties": false,
-      "properties": {
-        "action": { "type": "array", "items": { "type": "string" }, "default": ["shell"] },
-        "anyOf": {
-          "type": "array",
-          "minItems": 1,
-          "maxItems": 64,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "properties": {
-              "argv": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string" } },
-              "pattern": { "type": "string", "maxLength": 512 }
-            }
-          }
-        }
-      }
-    },
-    "rule": {
-      "type": "object",
-      "required": ["id", "when", "action"],
-      "additionalProperties": false,
-      "properties": {
-        "id": { "type": "string", "maxLength": 128 },
-        "when": { "$ref": "#/definitions/when" },
-        "action": { "enum": ["allow", "ask", "deny"] },
-        "message": { "type": "string", "maxLength": 512 },
-        "cacheTtlMs": { "type": "integer", "minimum": 0, "maximum": 3600000, "default": 0 }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": { "action": { "const": "allow" }, "cacheTtlMs": { "type": "integer", "minimum": 1 } },
-            "required": ["action", "cacheTtlMs"]
-          },
-          "then": {
-            "properties": { "when": { "not": { "anyOf": [ { "required": ["git"] }, { "required": ["env"] }, { "required": ["time"] } ] } } }
-          }
-        }
-      ]
-    },
-    "when": {
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "argv": { "type": "array", "minItems": 1, "maxItems": 32, "items": { "type": "string" } },
-        "argvAt": {
-          "type": "object",
-          "propertyNames": { "pattern": "^(0|[1-9][0-9]*)$" },
-          "additionalProperties": { "type": "string" }
-        },
-        "pattern": { "type": "string", "maxLength": 512 },
-        "classification": { "enum": ["static", "opaque"] },
-        "flag": {
-          "type": "object",
-          "propertyNames": { "pattern": "^-{1,2}[A-Za-z][A-Za-z0-9-]*$" },
-          "additionalProperties": { "enum": ["present", "absent"] }
-        },
-        "flagValue": {
-          "type": "object",
-          "minProperties": 1,
-          "propertyNames": { "pattern": "^-{1,2}[A-Za-z][A-Za-z0-9-]*$" },
-          "additionalProperties": { "type": "string", "maxLength": 256 }
-        },
-        "paths": {
-          "type": "array",
-          "maxItems": 16,
-          "items": {
-            "type": "object",
-            "required": ["within"],
-            "additionalProperties": false,
-            "properties": {
-              "operandIndex": { "type": "integer", "minimum": 0 },
-              "within": { "enum": ["cwd", "project", "home", "any"] },
-              "glob": { "type": "string", "maxLength": 512 }
-            }
-          }
-        },
-        "git": {
+        "budget": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "branch": { "$ref": "#/definitions/stringMatcher" },
-            "upstream": { "$ref": "#/definitions/stringMatcher" },
-            "dirty": { "type": "boolean" }
+            "maxRejections": { "type": "integer", "minimum": 1, "maximum": 10 },
+            "windowMs": { "type": "integer", "minimum": 60000 }
           }
         },
-        "env": {
-          "type": "object",
-          "propertyNames": { "pattern": "^[A-Za-z_][A-Za-z0-9_]*$" },
-          "additionalProperties": { "type": "string" }
-        },
-        "time": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": { "cron": { "type": "string", "maxLength": 128 } }
-        }
+        "enabled": { "type": "boolean", "default": true }
       }
     },
-    "stringMatcher": {
+    "tool": {
       "type": "object",
+      "required": ["command"],
       "additionalProperties": false,
       "properties": {
-        "in": { "type": "array", "items": { "type": "string" }, "maxItems": 64 },
-        "glob": { "type": "string", "maxLength": 256 },
-        "equals": { "type": "string" }
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "cwd": { "type": "string" },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "null"] }
+        },
+        "lifecycle": { "enum": ["persistent", "spawn"], "default": "persistent" },
+        "idleTimeoutMs": { "type": "integer", "minimum": 30000 },
+        "input": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "session": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "id": { "type": "boolean" },
+                "agent": { "type": "boolean" }
+              }
+            },
+            "mcp": { "type": "boolean" }
+          }
+        },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 30000, "default": 5000 },
+        "killGraceMs": { "type": "integer", "minimum": 50, "maximum": 2000, "default": 250 },
+        "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 1048576, "default": 65536 },
+        "onError": { "enum": ["skip", "ask", "deny"], "default": "ask" },
+        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
       }
     }
   }

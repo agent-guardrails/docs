@@ -1,103 +1,87 @@
-# 08 — Request Processing (Engine Check Pipeline)
+# 08 — Stage Walk (Orchestrator)
 
-Version 0.1 · 2026-10-30
+Version 1.1 · 2026-10-31
 
-End-to-end behavior of `policy/check` (02 §2.4) inside the engine.
+End-to-end behavior of `policy/check` inside the engine. The engine core is a
+pure orchestrator (ADR-0008): no parsing, no matching — only invocation of stage
+tools and composition of their verdicts.
 
 ## 8.1 Pipeline
 
 ```
-validate(params)                    → -32602 on schema violation (no side effects)
-  ↓
-enforceLimits(params)               → degrade per command if over (maxCommands handled by shim)
-  ↓
-buildContext(invocation, deadline)  → git/env/time facts per §8.4; deadline-guarded
-  ↓
-for each command (in order):
-    normalize(raw, cwd, stageFlags) → 07 §7.3          {classification, tokens, argv, …}
-    walkStages(command, ctx)        → per-command outcome (§8.2)
-  ↓
-aggregate(outcomes)                 → most-restrictive-wins (§8.3)
-  ↓
-audit(...)  +  respond(result)      → 02 §2.4 response shape
+validate(request)                          → -32602 on schema violation
+for each stage, in config array order:
+    if !stage.enabled:                     continue
+    if stage.applyWhen == "ask-only" and verdict != "ask":
+                                           continue   # не пересматриваем policy-доверие
+    ensure tool (persistent pool or spawn) — supervisor, deadlines
+    if verdict == deny and onExistingDeny == "skip":
+                                           continue        # stage not even invoked
+    outcome = invoke(stage.tool, request, deadline)        # 06 §6.4
+    classify(outcome)                      → onError-policy or (verdict, message)
+    if stage.exclusive and outcome != noop: break          # поздние стадии не вызываются
+aggregate(outcomes)                        → most-restrictive-wins + message per §8.3
+audit(...) + respond(result)               → 06 §6.4.3 response shape
 ```
 
-Any engine-internal exception per command ⇒ that command's outcome = `defaults.onError` (`ask`|`deny`), `stage: null`,
-reason `internal-error` — the check as a whole still answers. A deadline breach mid-walk ⇒ remaining commands get
-`defaults.onError`; already-walked commands keep their outcomes unless the aggregate is already `deny`.
+## 8.2 Invocation and outcome per stage
 
-## 8.2 Stage walk (per command, normative order)
-
-```
-outcome = none
-for stage in stages (array order):
-    if not scopeMatches(stage.scope, command):        continue      # 06 §6.3 matchers
-    if stage.passive:
-        r = matchRules(stage.rules, command, ctx)                   # audit recording only
-        record(stage, r); continue
-    ownOutcome = matchRules(stage.rules, command, ctx)              # first match wins (order)
-    if ownOutcome == none: ownOutcome = defaults.action
-    outcome = ownOutcome; ownedStage = stage
-    if stage.exclusive: break            # owned here; later stages never see it (06 §6.3)
-    if stage.terminal and matchedARule:  break
-    # terminal with NO rule match, non-exclusive → continue to next stage
-if outcome == none: outcome = defaults.action; ownedStage = null
-```
-
-Rules:
-
-- `matchRules` evaluates `rules[]` in array order; ALL `when` conditions must hold (AND); first match is final
-  for the stage. Matching semantics per condition type: `07-command-parsing.md` §7.4–7.6.
-- Allow-classification rule: `action: "allow"` matches only `static` commands (07 §7.2).
-- Context conditions (`git`, `env`, `time`) whose provider is disabled or whose lookup failed NEVER match —
-  including for `deny` rules (a deny that silently matched everything on provider failure would be surprising;
-  the command simply proceeds to later stages / defaults, which are ask-biased).
-- `outcome` records `{action, stage.id, rule.id, reason, facts}` for the response's `commands[]`.
+1. **Call**: write request JSON (06 §6.4.2) to the stage tool's stdin; deadline
+   = stage `tool.timeoutMs`.
+2. **Outcome** (06 §6.4.4): valid verdict, or onError.
+3. **onError** ⇒ this stage contributes the `onError` action (skip/ask/deny)
+   with no message; violation counted; **walk continues** unless the tool pool
+   is restarting (then remaining stages still run — each stage fails
+   independently; one broken tool must not disable the others).
 
 ## 8.3 Aggregation
-
-The shim applies one `event.effect`, so the engine MUST aggregate per-command outcomes into one verdict:
 
 | Combination | Aggregate |
 |---|---|
 | any `deny` | `deny` |
-| else any `ask` (incl. unowned/`defaults.action`) | `ask` |
-| else all `allow` (and ≥ 1 command) | `allow` |
+| else any `ask` (incl. defaults/`onError`) | `ask` |
+| else all `allow` (≥ 1 contributing stage) | `allow` |
+| no stage contributed | `defaults.action` (top-level `defaults.action`, default `ask`) |
 
-`message`: the first deny/ask reason in command order. `commands[].verdict` echoes per-command outcomes.
+**Message composition** (order = array order):
 
-## 8.4 Context providers
+| Stage `onExistingDeny` | Contribution to `message` |
+|---|---|
+| `append` (policy-family default) | `message = compose(message, reason)` — `existing — reason` |
+| `skip` (format-family default) | if `verdict == "deny"` already: stage **not invoked** (saves the call); else contributes its reason |
+| `replace` (redirect-family) | `message = stage reason` — replaces everything accumulated |
 
-| Provider | Facts | Rules |
-|---|---|---|
-| `git` | `branch`, `upstream`, `dirty`, `worktree` | resolved once per invocation (cached per session with staleness cap from `limits`); lookups run with cwd = command cwd; failures ⇒ conditions non-matching (see above) |
-| `env` | values of allowlisted vars only | never logged, never echoed into `facts` |
-| `time` | wall clock, cron-window membership | evaluated against UTC unless a rule specifies TZ (v1: UTC only) |
+Order-independence: with these three verbs the final message is identical for
+any plugin/stage ordering (verified cases in `adr/0009`).
 
-Context building shares the invocation deadline: git lookups get at most half the remaining budget; if exceeded,
-git conditions are non-matching for this invocation.
+## 8.4 Rejection budget (per stage, per session)
 
-## 8.5 Idempotence & side-effect rules
+Stages with a `budget` (06 §6.3) are subject to ADR-0010: the engine counts
+this stage's deny verdicts per `(stage, sessionID)` within `windowMs`; on
+exhausting `maxRejections` the stage is **bypassed** for the session (walk
+continues without it; first bypass adds the suspension notice to the message).
+Reset: stage produced a non-deny verdict, or window expired. Never auto-allow:
+bypassed stages simply do not contribute — commands fall to `defaults.action`
+(ask) or other stages.
 
-- `policy/check` is read-only (05 §5.4); safe to retry. The shim does not retry automatically (deadline policy covers
-  it); engines MUST tolerate duplicate `invocation.id`s (idempotent).
-- Audit emission (`audit/event`) is fire-and-forget; audit failures never alter verdicts.
-
-## 8.6 Reference pseudocode
+## 8.5 Pseudocode
 
 ```ts
 async function check(req: CheckParams, deadline: Deadline): Promise<CheckResult> {
-  assertSchema(req)                                        // -32602
-  const ctx = await buildContext(req.invocation, deadline) // §8.4, deadline-guarded
-  const outcomes = []
-  for (const cmd of req.commands) {
-    const norm = normalize(cmd.raw, cmd.cwd)               // 07 §7.3
-    const outcome = walkStages(norm, cmd, ctx, deadline)   // §8.2
-    outcomes.push({ index: cmd.index, ...outcome })
+  assertSchema(req)
+  let verdict: Verdict = "allow", message: string | undefined
+  for (const stage of stages.filter(s => s.enabled)) {
+    if (verdict === "deny" && stage.onExistingDeny === "skip") continue
+    const o = await invoke(stage, req, deadline)   // §8.2; onError → stage.onError
+    verdict = mostRestrictive(verdict, o.action)
+    message = composeMessage(message, o, stage.onExistingDeny)
+    budget.charge(stage, o, req.invocation)
   }
-  const verdict = aggregate(outcomes)                      // §8.3
-  audit({ verdict, outcomes, req })                        // fire-and-forget
-  return { invocationId: req.invocation.id, verdict, commands: outcomes,
-           message: firstReason(outcomes), engine: { checkMs: elapsed() } }
+  audit({ verdict, message, req })
+  return { invocationId: req.invocation.id, verdict, message, engine: { checkMs: elapsed() } }
 }
 ```
+
+Per-stage `verdict`/`stage`/`ruleId` diagnostics are returned in
+`result.commands[]` only if the stage tool provided them; the core adds stage id
+and onError reasons.
