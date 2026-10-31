@@ -68,3 +68,24 @@ Setup: smoke project with `permissions: [shell → ask]` substrate + the shim
 Open protocol addition: `policy/check` request gains `context.env` — the
 allowlisted host variables read by the shim (the engine process itself is
 spawned empty and cannot see the host env; it only relays the fields).
+
+### 10.5.1 Open question — ask-escalation on native-allow substrate (untested)
+
+Architecture flip (substrate `shell → allow`, engine denies/asks what's
+dangerous) removes the ask→allow limitation entirely — IF hook **ask**
+escalation publishes a prompt on a native-allow substrate. Confirmed this
+session: hook **deny** works on native-allow. Untested: hook **ask**.
+
+Procedure (next session, ~5 min):
+1. Smoke project (temp dir or recreate per 10.5): substrate allow,
+   stage tool = `mock-escalate.mjs` (returns ask for everything), plugin
+   installed.
+2. Reload check: `tail -2 $SMOKE/probe.log` — must show `setup begin` with the
+   escalate engine BEFORE testing (reload trigger is finicky: config touch and
+   src edits both work but not reliably; verify before proceeding).
+3. `opencode run "run exactly this command: echo warden-escalation-test"`:
+   - echo does NOT execute (+ auto-reject prompt) → escalation works →
+     architecture confirmed, proceed to engine M0;
+   - echo executes → hook ask does not escalate on allow-substrate → v1.1
+     reduces to deny-only engine; escalation needs the M1 `permission.reply`
+     automation instead.
