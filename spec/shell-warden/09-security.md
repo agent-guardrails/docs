@@ -22,7 +22,7 @@ Version 0.1 · 2026-10-30
 | I2 | Engine location from user-global config only; bad/relative path ⇒ plugin disables itself |
 | I3 | Every anomaly (parse error, bad version, unknown method, malformed/oversize frame, timeout, crash, stdin/stdout violation) resolves the invocation to `onEngineError ∈ {ask, deny}` — never `allow` |
 | I4 | Budgets enforced by the shim regardless of engine behavior |
-| I5 | The shim never loosens: verdict application is tighten-only; explicit config `deny` and `policies` remain unoverridable |
+| I5 | The shim never loosens an existing deny; otherwise the engine verdict replaces the accumulated effect — automating a configured `ask` into `allow` is the product. Explicit config `deny` and `policies` never reach hooks and remain unoverridable |
 | I6 | Payload caps everywhere: frames 64 KiB default, facts 16 KiB / depth 8, reasons ≤ 256 chars, messages ≤ 512 |
 | I7 | Protocol version exact-match at handshake; mismatch ⇒ degrade |
 | I8 | Optional sha256 pinning of the engine binary; mismatch ⇒ refuse to spawn |

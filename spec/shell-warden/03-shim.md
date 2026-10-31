@@ -38,19 +38,26 @@ Why these hooks:
 1. if opts.actions does not include ev.action      → return            (hook is a no-op)
 2. if ev.effect === "deny"                         → return            (final; never touch)
 3. key = hash(ev.action + ev.resources.join("\u0000") + cwd + ev.agent)
-4. cached = cache.get(key); if cached              → tighten(ev, cached); return
+4. cached = cache.get(key); if cached              → applyToEvent(ev, cached); return
 5. r = supervisor.check(buildCheckRequest(ev))     → VERDICT | ERROR
-6. ERROR → tighten(ev, opts.onEngineError)         // no engine error text into prompts
-7. tighten(ev, r.verdict, r.message)
+6. ERROR → applyToEvent(ev, opts.onEngineError)    // no engine error text into prompts
+7. applyToEvent(ev, r.verdict, r.message)
 8. if r.verdict === "allow" && r.cacheTtlMs > 0    → cache.put(key, r, ttl)
 ```
 
-`tighten` is rank-guarded: `{allow:0, ask:1, deny:2}`; a write only applies if its rank is **higher** than the
-current `effect` (never loosens — invariant I5). `onEngineError: "ask"` (default) leaves the native prompt to decide;
+**v1.1 application semantics** (revised after the live smoke): the engine is the
+policy authority — its verdict **replaces** the accumulated effect, including
+automating a configured `ask` into `allow` (that is the product: policies
+automate trust). The only guard: an existing `deny` is never loosened.
+`onEngineError: "ask"` (default) leaves the native prompt to decide;
 `"deny"` for hard-fail environments.
 
-`cwd` for step 3/5 comes from the evaluate event's session (`ctx.session.get`) — resolved fresh per invocation,
-never cached across sessions.
+**v0.1 integration caveat (smoke finding on OpenCode v2.2.2):** `cwd` is fixed
+to `""` — resolving it via `ctx.session.get` **inside the evaluate hook
+deadlocks** (re-entrant HTTP call into the server while it evaluates
+permissions for the same session; the hook then hangs, the ask falls to
+native auto-reject). M1: resolve cwd via a session-event cache outside the hot
+path (05 §5, ADR-0007 discussion).
 
 ## 3.3 Supervisor (engine lifecycle, shim side)
 

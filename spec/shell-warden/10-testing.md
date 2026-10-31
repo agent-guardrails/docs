@@ -48,3 +48,23 @@ at least one positive and one negative case.
 - Mock engine configurable per test: scripted responses, delays, oversize frames, crash timing.
 - Deterministic: no wall-clock in assertions (inject clock), no port binding (stdio only).
 - Coverage gates: shim statements ≥ 90%; every I3 row of `09-security.md` §9.4 exercised by at least one test.
+
+## 10.5 Integration smoke — first live run (2026-10-31, OpenCode v2.2.2)
+
+Setup: smoke project with `permissions: [shell → ask]` substrate + the shim
+(local dir) + mock engine (persistent, deny `rm -rf`, allow the rest); headless
+`opencode run`.
+
+| Check | Result |
+|---|---|
+| Plugin loads from a local dir (package.json exports) | ✅ no LoadError; file watchers active |
+| evaluate hook fires for shell commands | ✅ event shape confirmed: `{action: "shell", effect: "ask", resources: ["…"]}` |
+| Wire E2E: shim → engine spawn → handshake → policy/check | ✅ first call ~215 ms (spawn+handshake), cached 3 ms — persistent pool works live |
+| Deny path | ✅ `permission.rejected: denied by mock` reaches the agent with the reason; command not executed |
+| **Allow path** | ❌ **hook allow does not suppress a configured ask on v2.2.2** — the prompt publishes and run-mode auto-rejects; deny escalations are honored, allow-downgrades are not. Next: retest on v2.2.5; fallback M1: auto-answer published asks via `permission.reply` when the engine pre-approved the invocation |
+| `ctx.session.get` inside the evaluate hook | ❌ **deadlock** — re-entrant HTTP into the server during permission evaluation; hook hangs forever, ask auto-rejects. Removed from the hot path; M1: session-event cache |
+| Auxiliary model calls (title/summary) in headless run | ⚠️ fail auth ("User not found") — unrelated to the shim |
+
+Open protocol addition: `policy/check` request gains `context.env` — the
+allowlisted host variables read by the shim (the engine process itself is
+spawned empty and cannot see the host env; it only relays the fields).
