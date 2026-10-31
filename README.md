@@ -29,6 +29,13 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0004](adr/0004-naming-shell-warden-family.md) | Naming family: `shell-*` engines, `opencode-*-hook` plugins | Accepted |
 | [0005](adr/0005-single-evaluate-hook-stages-in-engine.md) | Single evaluate hook; stage routing lives in the engine | Accepted |
 | [0006](adr/0006-adopt-docs-repo.md) | This repository is the canonical knowledge base | Accepted |
+| [0007](adr/0007-one-evaluation-component.md) | One evaluation component: legibility and routing merge into the warden engine | Accepted |
+| [0008](adr/0008-orchestrator-core-logic-in-tools.md) | Orchestrator core, decisions in stage tools | Accepted |
+| [0009](adr/0009-message-resolution-on-existing-deny.md) | Stage message resolution | Superseded by 0012 |
+| [0010](adr/0010-bounded-rejection-suspension-to-ask.md) | Bounded rejection: budget → suspension to ask | Accepted |
+| [0011](adr/0011-quality-gates-vote-on-review-path.md) | Quality gates vote only on the review path | Accepted |
+| [0012](adr/0012-stage-message-composition.md) | Stage message composition: `messageMode`, first-deny-stops | Accepted |
+| [0013](adr/0013-substrate-fail-closed-reply-automation.md) | Substrate is the fail-closed boundary; the hook answers published permission requests | Accepted |
 
 ## Conventions
 

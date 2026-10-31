@@ -61,21 +61,10 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
                                        //   redirect stages: "replace" (instruction replaces)
                                        //   The first deny stops the walk (ADR-0012)
 
-  "voteOn": "always",                  // "always" | "ask" (default "always")
-                                       //   "ask": the stage runs only when the aggregate
-                                       //   is ask (the command is heading to human review).
-                                       //   The stage never re-litigates policy trust:
-                                       //   allow = automated trust, the format gate does
-                                       //   not interfere (ADR-0007).
-                                       //   Recommendation: format stages → "ask",
-                                       //   redirect/policy → "always".
-
   "exclusive": false,                  // a non-noop stage verdict → later stages are
                                        //   NOT invoked (redirect absorption: the tool
                                        //   decides its own relevance; a noop response
                                        //   does not claim)
-  "passive": false,                    // audit-only: the tool is invoked, its verdict
-                                       //   does not affect the aggregate
 
   "budget": {                          // optional (§6.6): typically for deny-with-
     "maxRejections": 3,                //   recommendation stages
@@ -184,7 +173,6 @@ a tool pool restart; the ladder is as in 02-protocol §2.7.
 verdict = defaults.action; message = ∅; owned = true
 for stage of stages (array order):
     if !stage.enabled:                                          continue
-    if stage.voteOn == "ask" and verdict != "ask":              continue
     if !owned:                                                  continue   # exclusive claim
     outcome = invoke(stage.tool, command, deadline)             # §6.4
     if outcome == onError:      outcome = stage.onError policy
@@ -201,12 +189,11 @@ for stage of stages (array order):
   (`existing — reason`); `skip` stays silent on a foreign deny.
   Order-independent.
 - **Invocation control**: `exclusive` removes the command from later stages
-  after a non-noop response; `passive` — audit-only; `voteOn: "ask"` — the
-  stage never re-litigates a policy allow. A separate `terminal` flag is not
-  needed: in the tool model the tool always answers with a verdict, there is
-  no "matched/did not match" distinction — `exclusive` covers both cases.
+  after a non-noop response. A separate `terminal` flag is not needed: in the
+  tool model the tool always answers with a verdict, there is no
+  "matched/did not match" distinction — `exclusive` covers both cases.
 - **Recommended order**: redirect stages (exclusive) → format stages
-  (voteOn: ask, messageMode: append) → policy stages (append).
+  (messageMode: append) → policy stages (append).
 
 ## 6.6 Rejection budget (ADR-0010)
 

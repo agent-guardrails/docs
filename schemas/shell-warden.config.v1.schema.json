@@ -42,9 +42,7 @@
         "type": { "const": "tool" },
         "tool": { "$ref": "#/definitions/tool" },
         "messageMode": { "enum": ["append", "replace"], "default": "append" },
-        "voteOn": { "enum": ["always", "ask"], "default": "always" },
         "exclusive": { "type": "boolean", "default": false },
-        "passive": { "type": "boolean", "default": false },
         "budget": {
           "type": "object",
           "additionalProperties": false,
