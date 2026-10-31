@@ -41,7 +41,7 @@
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
         "type": { "const": "tool" },
         "tool": { "$ref": "#/definitions/tool" },
-        "onExistingDeny": { "enum": ["append", "skip", "replace"], "default": "append" },
+        "messageMode": { "enum": ["append", "replace"], "default": "append" },
         "applyWhen": { "enum": ["always", "ask-only"], "default": "always" },
         "exclusive": { "type": "boolean", "default": false },
         "passive": { "type": "boolean", "default": false },

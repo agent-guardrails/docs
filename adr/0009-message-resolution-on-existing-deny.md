@@ -1,6 +1,6 @@
 # 0009 — Message resolution across stages: `onExistingDeny`
 
-* **Status:** Accepted (2026-10-31)
+* **Status:** Superseded by [0012](0012-stage-message-composition.md) (2026-10-31)
 * **Deciders:** preved911
 * **Related:** ADR-0007, [spec/shell-warden/08](../spec/shell-warden/08-request-processing.md) §8.3
 

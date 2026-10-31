@@ -58,7 +58,7 @@ allow): наша ошибка не должна наказывать агент�
   "tool": { "command": ["/usr/local/bin/warden-legible"], "lifecycle": "persistent",
             "timeoutMs": 1000, "onError": "ask" },
   "applyWhen": "ask-only",               // ← не мешает policy-доверию (§1)
-  "onExistingDeny": "skip",              // не критикует уже отклонённое
+  "messageMode": "append",               // причины append; первый deny останавливает walk
   "budget": { "maxRejections": 3, "windowMs": 1800000 } }
 ```
 

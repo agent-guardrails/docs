@@ -55,10 +55,11 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
 
   "tool": { /* §6.4 — REQUIRED: контракт вызова инструмента */ },
 
-  "onExistingDeny": "append",          // "append" | "skip" | "replace" (§6.5, default "append")
-                                       //   policy-стадии: "append"
-                                       //   format-стадии:  "skip"   (формат молчит при чужом deny)
-                                       //   redirect-стадии: "replace" (переход в MCP поглощает всё)
+  "messageMode": "append",             // "append" | "replace" (default "append")
+                                       //   policy-стадии:  "append"  (причина дополняет)
+                                       //   format-стадии:  "append"  (обычно standalone)
+                                       //   redirect-стадии: "replace" (инструкция-замена)
+                                       //   Первый deny останавливает walk (ADR-0012)
 
   "applyWhen": "always",               // "always" | "ask-only" (default "always")
                                        //   "ask-only": стадия исполняется только когда агрегат
@@ -158,7 +159,7 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
 - `verdict` ∈ `allow | ask | deny` — REQUIRED. Единственный формат: pass/fail
   режимов нет (инструмент сам владеет своим маппингом через собственный конфиг).
 - `message` ≤ 512 символов; попадает в итоговое сообщение отказа/промпта
-  согласно `onExistingDeny` стадии.
+  согласно `messageMode` стадии.
 - `cacheTtlMs` — только для pass-вердиктов (I9: deny не кэшируется).
 - Пустая строка = «стадия не голосует».
 
@@ -183,14 +184,14 @@ for stage of stages (порядок массива):
     if !stage.enabled:                                          continue
     if stage.applyWhen == "ask-only" and verdict != "ask":      continue
     if !owned:                                                  continue   # exclusive-изъятие
-    if verdict == "deny" and stage.onExistingDeny == "skip":    continue
     outcome = invoke(stage.tool, command, deadline)             # §6.4
     if outcome == onError:      outcome = stage.onError-политика
     if outcome.message:
-        if stage.onExistingDeny == "replace":  message = outcome.message
-        else:                                  message = compose(message, outcome.message)
+        if stage.messageMode == "replace":  message = outcome.message
+        else:                               message = compose(message, outcome.message)
     verdict = mostRestrictive(verdict, outcome.action)
-    if stage.exclusive and outcome != noop:  owned = false   # поздние стадии не вызываются
+    if verdict == "deny":                       break   # первый deny останавливает walk (ADR-0012)
+    if stage.exclusive and outcome != noop:     owned = false   # поздние стадии не вызываются
 ```
 
 - **Вердикт** — most-restrictive (`deny > ask > allow`); инвариантен к порядку.

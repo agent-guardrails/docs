@@ -15,11 +15,10 @@ for each stage, in config array order:
     if stage.applyWhen == "ask-only" and verdict != "ask":
                                            continue   # не пересматриваем policy-доверие
     ensure tool (persistent pool or spawn) — supervisor, deadlines
-    if verdict == deny and onExistingDeny == "skip":
-                                           continue        # stage not even invoked
     outcome = invoke(stage.tool, request, deadline)        # 06 §6.4
     classify(outcome)                      → onError-policy or (verdict, message)
-    if stage.exclusive and outcome != noop: break          # поздние стадии не вызываются
+    if verdict == deny:                    break     # первый deny останавливает walk (ADR-0012)
+    if stage.exclusive:                    break     # ненулевой вердикт — поздние не вызываются
 aggregate(outcomes)                        → most-restrictive-wins + message per §8.3
 audit(...) + respond(result)               → 06 §6.4.3 response shape
 ```
@@ -45,11 +44,14 @@ audit(...) + respond(result)               → 06 §6.4.3 response shape
 
 **Message composition** (order = array order):
 
-| Stage `onExistingDeny` | Contribution to `message` |
+| Stage `messageMode` | Contribution to `message` |
 |---|---|
-| `append` (policy-family default) | `message = compose(message, reason)` — `existing — reason` |
-| `skip` (format-family default) | if `verdict == "deny"` already: stage **not invoked** (saves the call); else contributes its reason |
+| `append` (policy/format default) | `message = compose(message, reason)` — `existing — reason` |
 | `replace` (redirect-family) | `message = stage reason` — replaces everything accumulated |
+
+Walk rule: **the first `deny` stops the walk** — later stages are not invoked,
+and the denying stage's reason is the message. Together with `messageMode`
+this replaces the v1.0 `skip` verb (ADR-0012).
 
 Order-independence: with these three verbs the final message is identical for
 any plugin/stage ordering (verified cases in `adr/0009`).
@@ -71,11 +73,12 @@ async function check(req: CheckParams, deadline: Deadline): Promise<CheckResult>
   assertSchema(req)
   let verdict: Verdict = "allow", message: string | undefined
   for (const stage of stages.filter(s => s.enabled)) {
-    if (verdict === "deny" && stage.onExistingDeny === "skip") continue
+    if (stage.applyWhen === "ask-only" && verdict !== "ask") continue
     const o = await invoke(stage, req, deadline)   // §8.2; onError → stage.onError
     verdict = mostRestrictive(verdict, o.action)
-    message = composeMessage(message, o, stage.onExistingDeny)
+    message = composeMessage(message, o, stage.messageMode)
     budget.charge(stage, o, req.invocation)
+    if (verdict === "deny") break                  // первый deny останавливает walk (ADR-0012)
   }
   audit({ verdict, message, req })
   return { invocationId: req.invocation.id, verdict, message, engine: { checkMs: elapsed() } }
