@@ -61,12 +61,12 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
                                        //   redirect-стадии: "replace" (инструкция-замена)
                                        //   Первый deny останавливает walk (ADR-0012)
 
-  "applyWhen": "always",               // "always" | "ask-only" (default "always")
-                                       //   "ask-only": стадия исполняется только когда агрегат
+  "voteOn": "always",               // "always" | "ask" (default "always")
+                                       //   "ask": стадия исполняется только когда агрегат
                                        //   = ask (команда идёт на человеческое ревью). Стадия не
                                        //   пересматривает policy-доверие: allow = автоматическое
                                        //   доверие, формат-гейт не мешает (ADR-0007).
-                                       //   Рекомендация: format-стадии → "ask-only",
+                                       //   Рекомендация: format-стадии → "ask",
                                        //   redirect/policy → "always".
 
   "exclusive": false,                  // ненулевой вердикт стадии → поздние стадии НЕ вызываются
@@ -182,7 +182,7 @@ Strict validation: unknown keys, wrong types, cap violations ⇒ config invalid
 verdict = defaults.action; message = ∅; owned = true
 for stage of stages (порядок массива):
     if !stage.enabled:                                          continue
-    if stage.applyWhen == "ask-only" and verdict != "ask":      continue
+    if stage.voteOn == "ask" and verdict != "ask":      continue
     if !owned:                                                  continue   # exclusive-изъятие
     outcome = invoke(stage.tool, command, deadline)             # §6.4
     if outcome == onError:      outcome = stage.onError-политика
@@ -198,12 +198,12 @@ for stage of stages (порядок массива):
 - **Сообщение** — `replace` побеждает независимо от позиции; `append` дополняет
   (`existing — reason`); `skip` молчит при чужом deny. Порядконезависимо.
 - **Управление вызовом**: `exclusive` изымает команду из поздних стадий после
-  ненулевого ответа; `passive` — audit-only; `applyWhen: "ask-only"` — стадия
+  ненулевого ответа; `passive` — audit-only; `voteOn: "ask"` — стадия
   не пересматривает policy-allow. `terminal` как отдельный флаг не нужен:
   в tool-модели инструмент всегда отвечает вердиктом, различие
   «сматчил/не сматчил» отсутствует — `exclusive` покрывает оба случая.
 - **Рекомендуемый порядок**: redirect-стадии (exclusive) → format-стадии
-  (ask-only, skip) → policy-стадии (append).
+  (voteOn: ask, messageMode: append) → policy-стадии (append).
 
 ## 6.6 Rejection budget (ADR-0010)
 

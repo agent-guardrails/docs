@@ -12,7 +12,7 @@ tools and composition of their verdicts.
 validate(request)                          → -32602 on schema violation
 for each stage, in config array order:
     if !stage.enabled:                     continue
-    if stage.applyWhen == "ask-only" and verdict != "ask":
+    if stage.voteOn == "ask" and verdict != "ask":
                                            continue   # не пересматриваем policy-доверие
     ensure tool (persistent pool or spawn) — supervisor, deadlines
     outcome = invoke(stage.tool, request, deadline)        # 06 §6.4
@@ -73,7 +73,7 @@ async function check(req: CheckParams, deadline: Deadline): Promise<CheckResult>
   assertSchema(req)
   let verdict: Verdict = "allow", message: string | undefined
   for (const stage of stages.filter(s => s.enabled)) {
-    if (stage.applyWhen === "ask-only" && verdict !== "ask") continue
+    if (stage.voteOn === "ask" && verdict !== "ask") continue
     const o = await invoke(stage, req, deadline)   // §8.2; onError → stage.onError
     verdict = mostRestrictive(verdict, o.action)
     message = composeMessage(message, o, stage.messageMode)

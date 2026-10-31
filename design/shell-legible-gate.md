@@ -16,7 +16,7 @@ Implementation: stage tool for the shell-warden engine (ADR-0008). Not a hook pl
 |---|---|
 | Gate, а не display-rewrite | Нечитаемое → deny + рекомендации агенту. Никакой «читаемой версии» в промпте — человек видит ровно то, что исполнится (устраняет маскировку) |
 | Structural rules only | Правила — синтаксические конструкции с ~нулевым FP. Никаких эвристик «похоже на payload», никакой семантики |
-| Review-path only (`applyWhen: "ask-only"`) | Warden-allow ⇒ legible молчит: политики автоматизировали доверие — формат-гейт не пересматривает его. Enforce только на пути к ревью |
+| Review-path only (`voteOn: "ask"`) | Warden-allow ⇒ legible молчит: политики автоматизировали доверие — формат-гейт не пересматривает его. Enforce только на пути к ревью |
 | Bounded rejection (ADR-0010) | Бюджет отказов → suspension to ask: токен-lуп невозможен |
 
 ## 2. Что legible НЕ делает
@@ -57,7 +57,7 @@ allow): наша ошибка не должна наказывать агент�
 { "id": "legible", "type": "tool",
   "tool": { "command": ["/usr/local/bin/warden-legible"], "lifecycle": "persistent",
             "timeoutMs": 1000, "onError": "ask" },
-  "applyWhen": "ask-only",               // ← не мешает policy-доверию (§1)
+  "voteOn": "ask",               // ← не мешает policy-доверию (§1)
   "messageMode": "append",               // причины append; первый deny останавливает walk
   "budget": { "maxRejections": 3, "windowMs": 1800000 } }
 ```
