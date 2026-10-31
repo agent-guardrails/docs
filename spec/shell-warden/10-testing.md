@@ -61,7 +61,7 @@ Setup: smoke project with `permissions: [shell → ask]` substrate + the shim
 | evaluate hook fires for shell commands | ✅ event shape confirmed: `{action: "shell", effect: "ask", resources: ["…"]}` |
 | Wire E2E: shim → engine spawn → handshake → policy/check | ✅ first call ~215 ms (spawn+handshake), cached 3 ms — persistent pool works live |
 | Deny path | ✅ `permission.rejected: denied by mock` reaches the agent with the reason; command not executed |
-| **Allow path** | ❌ **hook allow does not suppress a configured ask on v2.2.2** — the prompt publishes and run-mode auto-rejects; deny escalations are honored, allow-downgrades are not. Next: retest on v2.2.5; fallback M1: auto-answer published asks via `permission.reply` when the engine pre-approved the invocation |
+| **Allow path** | ❌ **hook allow does not suppress a configured ask on v2.2.2** — retested with a pure-V2 `permissions` config (V1 `permission` block removed): same result. Deny escalations are honored, allow-downgrades are not. Next: retest on v2.2.5 (released 2026-10-30); fallback M1: auto-answer published asks via `permission.reply` when the engine pre-approved the invocation; if v2.2.5 still ignores hook allow — upstream issue |
 | `ctx.session.get` inside the evaluate hook | ❌ **deadlock** — re-entrant HTTP into the server during permission evaluation; hook hangs forever, ask auto-rejects. Removed from the hot path; M1: session-event cache |
 | Auxiliary model calls (title/summary) in headless run | ⚠️ fail auth ("User not found") — unrelated to the shim |
 
