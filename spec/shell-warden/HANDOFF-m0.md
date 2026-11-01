@@ -6,8 +6,13 @@ Spec source of truth: [`spec/shell-warden/06`](06-engine-config.md), [`08`](08-r
 
 ## Repo
 
-`agent-guardrails/shell-warden` — created (empty). TypeScript, type-stripping (no enums/param
-properties), deps: none at runtime; tests `node --test` (see the shim repo's tooling as the reference setup).
+`agent-guardrails/shell-warden` — created. **Language: Rust (ADR-0015)** — engine core + all
+reference tools; wire contract stays language-neutral. TS scaffolding removed.
+
+Toolchain: NOT installed on the dev machine — session step 0 is `rustup` install.
+Tooling reference: the shim repo (`opencode-shell-warden-hook`) —
+`test/helpers/mock-engine.mjs` shows the exact wire shapes the Rust impl must satisfy; its
+`src/supervisor.ts` is the pattern behind step 3.
 
 ## M0 scope (spec-implied, in build order)
 
