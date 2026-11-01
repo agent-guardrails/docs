@@ -2,6 +2,8 @@
 
 Version 1.1 · 2026-10-31
 
+> Re-targeted by [ADR-0016](../../adr/0016-two-tier-enforcement.md): this guidance becomes the normative parsing guide of the decision binary (no external stage tools). Rewrite pending.
+
 Since v1.1 the engine core does **no command parsing** (ADR-0008). Every stage
 tool receives the raw command and parses it itself. This document is guidance:
 **normative for the reference tools** (`warden-match`, `warden-legible`),

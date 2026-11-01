@@ -1,6 +1,6 @@
 # 0002 — Enforcement via persistent engine over NDJSON JSON-RPC stdio
 
-* **Status:** Accepted (2026-10-31)
+* **Status:** Superseded by [0016 — Two-tier enforcement](0016-two-tier-enforcement.md) (2026-11-01)
 * **Deciders:** preved911
 * **Related:** [spec/shell-warden/02-protocol.md](../spec/shell-warden/02-protocol.md), ADR-0005
 

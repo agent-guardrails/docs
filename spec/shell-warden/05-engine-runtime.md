@@ -1,6 +1,8 @@
 # 05 — Engine Runtime Contract
 
 Version 0.1 · 2026-10-30
+
+> Superseded in scope by [ADR-0016](../../adr/0016-two-tier-enforcement.md): the engine process contract is retired; the one-shot spawn contract moves to the shim spec. Rewrite pending.
 What the shim and this spec fix about the engine process. Everything else (internals, language) is free.
 
 ## 5.1 Process contract

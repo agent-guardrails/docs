@@ -2,6 +2,8 @@
 
 Version 1.1 · 2026-10-31
 
+> Superseded in scope by [ADR-0016](../../adr/0016-two-tier-enforcement.md): retargets to the binary's decision pipeline and the hook's application duties. Rewrite pending.
+
 End-to-end behavior of `policy/check` inside the engine. The engine core is a
 pure orchestrator (ADR-0008): no parsing, no matching — only invocation of stage
 tools and composition of their verdicts.

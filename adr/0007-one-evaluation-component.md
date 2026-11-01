@@ -1,6 +1,6 @@
 # 0007 — One evaluation component: legibility and routing merge into the warden engine
 
-* **Status:** Accepted (2026-10-31)
+* **Status:** Superseded by [0016 — Two-tier enforcement](0016-two-tier-enforcement.md) (2026-11-01)
 * **Deciders:** preved911
 * **Related:** ADR-0004 (naming; artifact table amended by this decision), ADR-0009 (message resolution)
 

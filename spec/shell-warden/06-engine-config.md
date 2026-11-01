@@ -1,6 +1,8 @@
 # 06 — Engine Configuration (v1.1: tool-first stages)
 
 Version 1.1 · 2026-10-31 · Supersedes the rules-grammar draft (never shipped)
+
+> Superseded in scope by [ADR-0016](../../adr/0016-two-tier-enforcement.md): this document is rewritten as the rules grammar of the single decision binary (flat rules, stages as family scopes; no stage tools). Rewrite pending.
 Schema: `schemas/shell-warden.config.v1.schema.json`
 
 ## 6.0 Core principle (ADR-0008)

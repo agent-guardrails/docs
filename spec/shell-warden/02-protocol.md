@@ -2,6 +2,8 @@
 
 Version 1 · 2026-10-30 · Schema: `../../schemas/wire.v1.schema.json`
 
+> Superseded in scope by [ADR-0016](../../adr/0016-two-tier-enforcement.md): the persistent wire protocol is retired; the letter/verdict shapes survive as the one-shot contract with the hook. Rewrite pending.
+
 ## 2.1 Transport & framing
 
 - **stdio** of the engine process. Shim writes requests to engine stdin; reads responses/notifications from stdout.
