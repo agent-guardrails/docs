@@ -1,44 +1,51 @@
 # 11 — Roadmap & Open Questions
 
-Version 0.1 · 2026-10-30
+Version 2.0 · 2026-11-01 · Re-baselined per [ADR-0016](../../adr/0016-two-tier-enforcement.md)
+
+The retired v1.x milestones (persistent engine M0–M4, TS reference engine) are
+history: the M0 engine implementation exists in the `shell-warden` repository
+as a retired reference. v2 rebuilds the system on two tiers.
 
 ## 11.1 Milestones
 
 | M | Scope | Done when |
 |---|---|---|
-| **M0 skeleton** | schemas (`../../schemas/*.json`), protocol codec, supervisor (spawn/handshake/restart/backoff), mock engine, contract harness | contract suite green against mock |
-| **M1 vertical slice** | `evaluate` hook end-to-end; reference TS engine implementing stage walk (08) + config v1 (06) + parsing v1 (07); deny reason visible in native prompt | integration checklist 1–3 pass; golden suite green |
-| **M2 hardening** | budgets/violations/unhealthy ladder; shim cache; `onEngineError` drill; sha256 pinning; config reload (last-good) | adversarial cases §10.3 green |
-| **M3 audit & observe** | `audit/event` pipeline, `policy/observe`, state-dir audit rollups, log levels | audit visible in server log; observe flag documented |
-| **M4 portability** | engine contract extracted as standalone spec; second adapter (CI wrapper or another agent's hook) proving G2 | second adapter merged |
+| **M1 decision core** | Rust binary `shell-warden`: config loader (strict, 06), parser (normalize → recursive split → classify, 07), matcher (scope entry, rule vote, refinement, reduction, 08), letter/verdict IO (02) + golden suite + spawn-latency measurement (10 §10.6) | golden suite green over example configs; every board-PR carries its doc slice |
+| **M2 hook integration** | letter build, one-shot invoker (03 §3.3), hook-owned state (deny budgets, allow cache, debug log, 03 §3.4–3.5), schema-conforming verdict application; live E2E `OpenCode → hook → shell-warden` (board P3) | integration checklist passes on live OpenCode v2.2.5 with the real checker; deny/allow/ask paths proven |
+| **M3 hardening** | adversarial contract cases (10 §3), `onCheckerError: "deny"` drill, concurrency-cap drill, config-valid/invalid fixtures, sha256 pin | adversarial cases green; every I3 row of 09 §9.4 tested |
+| **M4 portability** | contract extracted as standalone spec (letter/verdict schemas are already it); second adapter (CI wrapper or another harness's hook) proving G2 | second adapter merged |
+| **M5 distribution** | releases of the checker binary; Homebrew tap; public repo (board P3 backlog) | first tagged binary installable from the tap |
 
-## 11.2 Suggested build order inside M0/M1
+## 11.2 Suggested build order inside M1
 
-1. `packages/schema` — both JSON Schemas + fixtures
-2. `protocol.ts` codec (frame parse/serialize, id pool) + unit tests
-3. Mock engine + contract harness (fastest feedback loop)
-4. Supervisor states (03 §3.3) with deadline/backoff injection
-5. `applyVerdict` + tighten-only proof test
-6. Reference engine: config loader → normalizer/classifier (07) → stage walk (08) → CLI mode for golden tests
-7. Wire into `Plugin.define` and run the OpenCode integration checklist
+1. Grammar types + config loader + validation fixtures (06 ⇄ schema)
+2. Normalizer + classifier (07 §7.3–7.4) — unit-heavy, highest risk
+3. Recursive chain splitter (07 §7.2) — golden cases per construct
+4. Matcher: flag table + token/glob/flagValue/paths conditions (06 §6.4–6.5)
+5. Pipeline: refinement → first-deny/reduction → message (08)
+6. Letter/verdict IO + CLI + exit codes (02)
+7. Golden runner + measurement (10)
 
 ## 11.3 Open questions
 
 | # | Question | Current lean |
 |---|---|---|
-| Q1 | Reference engine language: TS-first or Rust-first? | TS for M1 velocity; Rust later behind the same contract |
-| Q2 | Default `actions`: `["shell"]` only, or include `edit`? | `["shell"]`; path-canonicalization rules needed before `edit`/`read` |
-| Q3 | Singleton engine vs per-session instances | singleton + session tags; revisit if engines grow heavy per-session state |
-| Q4 | Naming: `opencode-shell-warden-hook` / `shell-warden` | placeholder — decide before publish |
-| Q5 | MCP face for advisory/debug tools | post-M3; see [R§4] hybrid model |
-| Q6 | Project-supplied policy behind explicit global opt-in | v2; design the allowlist (`allowProjectPolicy`) when there is demand |
-| Q7 | Symlink-resolving canonicalization for `within` path checks | v2; requires fs-walk budget and TOCTOU care |
+| Q1 | Reference checker language | **Answered — Rust** (ADR-0015, carried by 0016) |
+| Q2 | Default `actions`: `["shell"]` only, or include `edit`? | `["shell"]`; path-canonicalization rules needed before `edit`/`read` (N5) |
+| Q3 | Context lookups (git branch/env/time) for placement rules? | v2 candidate; v1 keeps rules text-only (N6); letter carries no context by design (I6) |
+| Q4 | MCP face for advisory/debug tools | post-M4; letter/verdict shapes are harness-neutral, MCP adds ceremony without a channel win |
+| Q5 | Project-supplied policy behind explicit global opt-in | v2; design the allowlist (`allowProjectPolicy`) when there is demand |
+| Q6 | Symlink-resolving canonicalization for paths conditions | v2; requires fs-walk budget and TOCTOU care (T9) |
+| Q7 | Cache TTL default > 0 (allow caching on by default)? | default 0 until M2 latency data; revisit with §10.6 measurements |
+| Q8 | Wrapper/interpreter unwrap depth budget (07 §7.2) | cap list + depth in v1 grammar review; oversized nesting ⇒ opaque (fail-closed) |
 
 ## 11.4 Risks
 
 | Risk | Mitigation |
 |---|---|
-| Protocol drift between shim and third-party engines | schemas are the contract; conformance suite in `tests/contract` published for engine authors |
-| Shim size creep (the "thin layer" rots) | hard rule: no policy logic in shim; CI check — `packages/plugin/src` LOC budget 400, no imports beyond `@opencode/plugin` + node built-ins |
+| Contract drift between hook (TS) and checker (Rust) | schemas are the contract; contract suite runs the hook against a scripted mock (10 §10.1); schema-conformance gates on both sides |
+| Per-check spawn latency growth | golden measurement gate (§10.6) before M1 merge; spawn ≪ guarded command runtime accepted by ADR-0016 on measured basis |
+| Hook size creep (the "thin layer" rots) | hard rule: no policy logic in hook; CI check — no imports beyond `@opencode/plugin` + node built-ins; ~400 LOC budget |
 | Overloaded `message` becoming an injection channel | I11 — templates + allowlisted interpolation only; integration test asserts prompt content |
-| Config complexity snowball (stages × conditions) | strict schema validation; golden tests required per example config; keep v1 condition set closed |
+| Config complexity snowball (stages × conditions) | strict schema validation; golden tests required per example config; v1 condition set is closed (06 §6.5) |
+| Parser under-splitting a construct (false `static`) | recursive splitter per construct with golden cases; default `ask` for anything unrecognized (I10); adversarial suite §10.3 |

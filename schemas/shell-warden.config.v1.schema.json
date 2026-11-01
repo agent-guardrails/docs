@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://raw.githubusercontent.com/agent-guardrails/docs/main/schemas/shell-warden.config.v1.schema.json",
-  "title": "shell-warden engine configuration v1.1 (tool-first stages)",
+  "title": "shell-warden checker configuration v1 (flat rules grammar, ADR-0016)",
   "type": "object",
   "required": ["version", "stages"],
   "additionalProperties": false,
@@ -11,18 +11,17 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "action": { "enum": ["ask"], "default": "ask" }
+        "action": { "enum": ["ask"], "default": "ask" },
+        "message": { "type": "string", "maxLength": 512, "default": "no rule matched — ask the human" }
       }
     },
     "limits": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "configBytes": { "type": "integer", "maximum": 262144, "default": 262144 },
         "stages": { "type": "integer", "minimum": 1, "maximum": 64, "default": 64 },
-        "configBytes": { "type": "integer", "maximum": 262144 },
-        "factsBytes": { "type": "integer", "default": 16384 },
-        "factsDepth": { "type": "integer", "default": 8 },
-        "maxConcurrentTools": { "type": "integer", "default": 16 }
+        "rules": { "type": "integer", "minimum": 1, "maximum": 512, "default": 512 }
       }
     },
     "stages": {
@@ -35,63 +34,117 @@
   "definitions": {
     "stage": {
       "type": "object",
-      "required": ["id", "type", "tool"],
+      "required": ["id", "scope", "flags", "rules"],
       "additionalProperties": false,
       "properties": {
         "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,31}$" },
-        "type": { "const": "tool" },
-        "tool": { "$ref": "#/definitions/tool" },
-        "messageMode": { "enum": ["append", "replace"], "default": "append" },
-        "exclusive": { "type": "boolean", "default": false },
-        "budget": {
+        "scope": { "$ref": "#/definitions/conditionGroup" },
+        "flags": {
           "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "maxRejections": { "type": "integer", "minimum": 1, "maximum": 10 },
-            "windowMs": { "type": "integer", "minimum": 60000 }
-          }
+          "additionalProperties": { "type": "integer", "minimum": 0, "maximum": 4 }
         },
-        "enabled": { "type": "boolean", "default": true }
+        "rules": {
+          "type": "array",
+          "maxItems": 256,
+          "items": { "$ref": "#/definitions/rule" }
+        }
       }
     },
-    "tool": {
+    "conditionGroup": {
       "type": "object",
-      "required": ["command"],
+      "required": ["anyOf"],
       "additionalProperties": false,
       "properties": {
-        "command": {
+        "anyOf": {
           "type": "array",
           "minItems": 1,
-          "items": { "type": "string" }
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "oneOf": [
+              { "required": ["argv"], "additionalProperties": false, "properties": { "argv": { "$ref": "#/definitions/argvSequence" } } },
+              { "required": ["pattern"], "additionalProperties": false, "properties": { "pattern": { "type": "string", "minLength": 1, "maxLength": 512 } } }
+            ]
+          }
+        }
+      }
+    },
+    "argvSequence": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "oneOf": [
+          { "type": "string", "minLength": 1 },
+          {
+            "type": "object",
+            "required": ["anyOf"],
+            "additionalProperties": false,
+            "properties": {
+              "anyOf": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "minLength": 1 } }
+            }
+          }
+        ]
+      }
+    },
+    "rule": {
+      "type": "object",
+      "required": ["id", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9/.-]{0,63}$" },
+        "action": { "enum": ["allow", "ask", "deny"] },
+        "message": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "argv": { "$ref": "#/definitions/argvSequence" },
+        "argvAt": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": ["at", "one"],
+            "additionalProperties": false,
+            "properties": {
+              "at": { "type": "integer", "minimum": 0 },
+              "one": {
+                "oneOf": [
+                  { "type": "string", "minLength": 1 },
+                  {
+                    "type": "object",
+                    "required": ["anyOf"],
+                    "additionalProperties": false,
+                    "properties": {
+                      "anyOf": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "minLength": 1 } }
+                    }
+                  }
+                ]
+              }
+            }
+          }
         },
-        "cwd": { "type": "string" },
-        "env": {
+        "pattern": { "type": "string", "minLength": 1, "maxLength": 512 },
+        "classification": { "enum": ["static", "opaque"] },
+        "flag": {
           "type": "object",
-          "additionalProperties": { "type": ["string", "null"] }
+          "additionalProperties": { "enum": ["present", "absent"] }
         },
-        "lifecycle": { "enum": ["persistent", "spawn"], "default": "persistent" },
-        "idleTimeoutMs": { "type": "integer", "minimum": 30000 },
-        "input": {
+        "flagValue": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 256 }
+        },
+        "paths": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "session": {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "id": { "type": "boolean" },
-                "agent": { "type": "boolean" }
-              }
-            },
-            "mcp": { "type": "boolean" }
+            "within": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 512 } },
+            "notWithin": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "minLength": 1, "maxLength": 512 } }
           }
-        },
-        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 30000, "default": 5000 },
-        "killGraceMs": { "type": "integer", "minimum": 50, "maximum": 2000, "default": 250 },
-        "maxOutputBytes": { "type": "integer", "minimum": 1024, "maximum": 1048576, "default": 65536 },
-        "onError": { "enum": ["skip", "ask", "deny"], "default": "ask" },
-        "sha256": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$" }
-      }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "action": { "const": "allow" } } },
+          "then": { "not": { "required": ["message", "pattern", "classification"] }, "$comment": "allow never matches on raw/partial evidence; message is meaningless. Enforced by validation in addition to runtime rules (06 §6.6)." } }
+      ]
     }
   }
 }

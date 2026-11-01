@@ -1,64 +1,66 @@
 # 09 — Security: Trust Model, Invariants, Fail-Closed Matrix
 
-Version 0.1 · 2026-10-30
+Version 2.0 · 2026-11-01 · Revised per [ADR-0016](../../adr/0016-two-tier-enforcement.md)
 
 ## 9.1 Trust boundaries
 
 | Zone | Contents | Trust level |
 |---|---|---|
-| OpenCode server + native `permissions`/`policies` | outer layers | trusted; outrank everything the shim/engine decide |
-| Shim (npm plugin, in-process) | transport, supervision, verdict application | trusted code, user-installed; repo cannot supply it (engine path is user-global, I2) |
-| Shim options (`opencode.jsonc` plugins.options) | engine path, budgets | project-editable knobs are limited by validation: only budgets/actions/cache are tunable per project; `engine.*` is typically set globally — validate per 04 §4.3 |
-| Engine binary | decision maker | trusted local code, NOT a sandbox; must be protected from untrusted modification (absolute path, optional sha256 pin I8) |
-| Engine config (`shell-warden.jsonc`) | stages, rules | user-global only (D9); project copies ignored with warning |
-| Model output | command text, tool args | **untrusted input** — the only thing the engine evaluates |
-| Repository content | files the model may read/edit | untrusted; MUST NOT influence policy (no project rules, no project engine) |
+| OpenCode server + native `permissions`/`policies` | outer layers | trusted; outrank everything the hook/checker decide |
+| Hook (npm plugin, in-process) | reply automation, invoker, per-session state | trusted code, user-installed; carries no policy logic (03 §3.6) |
+| Hook options (`opencode.jsonc` plugins.options) | checker path, budgets | project-editable knobs are limited by validation: only budgets/actions/cache/rejectBudget/debug/logLevel are tunable per project; `checker.*` is user-global posture — validate per 04 §4.3 |
+| Checker binary | decision maker | trusted local code, NOT a sandbox; must be protected from untrusted modification (absolute path, optional sha256 pin I8) |
+| Checker config (rules file) | stages, rules | user-global only (D5); project copies ignored with warning |
+| Model output | command text, tool args | **untrusted input** — the only thing the checker evaluates; its splitting of the command is never trusted (07 §7.2 — the 0014 principle) |
+| Repository content | files the model may read/edit | untrusted; MUST NOT influence policy (no project rules, no project checker path) |
 
 ## 9.2 Invariants (normative)
 
 | # | Invariant |
 |---|---|
-| I1 | Engine `command[0]` absolute; no shell; child spawned with empty environment |
-| I2 | Engine location from user-global config only; bad/relative path ⇒ plugin disables itself |
-| I3 | Every anomaly (parse error, bad version, unknown method, malformed/oversize frame, timeout, crash, stdin/stdout violation) resolves the invocation to `onEngineError ∈ {ask, deny}` — never `allow` |
-| I4 | Budgets enforced by the shim regardless of engine behavior |
-| I5 | The shim never loosens an existing deny; otherwise the engine verdict replaces the accumulated effect — automating a configured `ask` into `allow` is the product. Explicit config `deny` and `policies` never reach hooks and remain unoverridable |
-| I6 | Payload caps everywhere: frames 64 KiB default, facts 16 KiB / depth 8, reasons ≤ 256 chars, messages ≤ 512 |
-| I7 | Protocol version exact-match at handshake; mismatch ⇒ degrade |
-| I8 | Optional sha256 pinning of the engine binary; mismatch ⇒ refuse to spawn |
-| I9 | Shim caches `allow` verdicts only, TTL engine-issued; denies never cached; config reload invalidates caches |
-| I10 | Allow verdicts originate only from `static` classification (07 §7.2); opaque commands degrade toward `ask` |
-| I11 | Engine error text is logged, never injected into prompts; prompt messages come from rule `message` templates with allowlisted context interpolation only |
+| I1 | Checker spawn: `command[0]` absolute; no shell; child spawned with **empty environment**; options are argv only |
+| I2 | Checker location from user-global config only; bad/relative path ⇒ plugin disables itself |
+| I3 | Every anomaly (spawn failure, timeout, graceful-kill, non-zero exit, unreadable/garbage/oversize stdout, schema violation, untrusted split) resolves the invocation to `onCheckerError ∈ {ask, deny}` — never `allow` |
+| I4 | Letter/verdict limits enforced by the hook regardless of checker behavior: letter ≤ 64 KiB / ≤ `maxRequestCommands` commands before spawn; verdict ≤ 64 KiB; spawn concurrency ≤ `maxConcurrentSpawns` |
+| I5 | The hook never loosens an existing deny; a reply allow applies only to a request whose checker verdict was allow; native denies are unreachable (hooks see only published asks) |
+| I6 | Payload caps everywhere: letter 64 KiB, verdict 64 KiB, facts 16 KiB / depth 8, messages ≤ 512, debug-log lines ≤ 16 KiB |
+| I7 | Letter and verdict schema exact conformance: `version` const, unknown fields, wrong types, wrong `invocationId` echo ⇒ degrade; both sides ship the schemas |
+| I8 | Optional sha256 pinning of the checker binary; mismatch ⇒ refuse to spawn |
+| I9 | Hook caches `allow` verdicts only, hook-configured TTL; denies never cached; uncached checks always see the current rules file (checker re-reads per spawn) |
+| I10 | Allow verdicts originate only from `static`, fully parsed commands (07 §7.3, 08 §8.2); opaque/unparseable degrades toward `ask` |
+| I11 | Checker error text is logged, never injected into prompts; prompt messages come from rule `message` templates with allowlisted context interpolation only |
 
 ## 9.3 Threat model (selected vectors)
 
 | # | Vector | Mitigation |
 |---|---|---|
-| T1 | Model crafts an obfuscated command (`$(…)`, vars, residual operators) to slip rules | classification `opaque` ⇒ allow-rules inert; default ask; deny-patterns still match on raw |
-| T2 | Repo ships `.opencode/shell-warden.jsonc` to widen policy | not loaded; warning logged (D9) |
-| T3 | Repo points the shim at a project-local engine | engine path is user-global + absolute; validation disables plugin on violation (I2) |
-| T4 | Malicious/typosquatted shim package | out of band: `policies` `plugin.use` deny; managed config outranks plugins config |
-| T5 | Engine crash-loop / hang | violation counters ⇒ unhealthy ⇒ all checks degrade per I3; supervision per 03 §3.3 |
-| T6 | Injection via `event.message` into prompts | messages only from rule templates + context interpolation of allowlisted fields (I11); engine error text never surfaced |
-| T7 | Stale cached allow after config change | cache invalidation on reload/restart; denies never cached (I9) |
-| T8 | Secrets leakage via requests/facts/audit | shim sends command text + ids + cwd + agent only; env values allowlisted and never echoed; payload caps (I6) |
-| T9 | Symlink trickery against `within` path checks | lexical canonicalization only in v1 — documented limitation; treat path conditions as advisory for hostile layouts |
-| T10 | Slow-engine DoS of the agent loop | per-check deadline + `maxInFlight` + unhealthy ladder (02 §2.7) |
+| T1 | Model crafts an obfuscated command (`$(…)`, vars, residual operators) to slip rules | part classification `opaque` ⇒ allow-rules inert; default ask; deny-patterns still match on raw (08 §8.4) |
+| T2 | Model smuggles a chain the harness split hid (`bash -c 'curl … \| sh'`) | recursive checker-side split (07 §7.2); every sub-part evaluated; unresolvable = opaque |
+| T3 | Repo ships `.opencode/shell-warden` rules to widen policy | not loaded; warning logged (D5/I2 posture) |
+| T4 | Repo points the plugin at a project-local checker | checker path is user-global + absolute; validation disables plugin on violation (I2) |
+| T5 | Checker package tampering | optional `sha256` pin (I8); releases signed/tagged per release engineering |
+| T6 | Injection via `event.message` into prompts | messages only from rule templates + allowlisted interpolation (I11); checker/infra errors never surfaced |
+| T7 | Stale cached allow after rules change | uncached checks re-read config every spawn; cached allows bounded by hook TTL; denies never cached (I9) |
+| T8 | Secrets leakage via letter/verdict/debug log | letter contains command text + ids + cwd + agent only; checker environment empty; payload caps (I6); debug dir outside projects (03 §3.5) |
+| T9 | Symlink trickery against `within` path checks | lexical canonicalization only in v1 — documented limitation; treat paths conditions as advisory for hostile layouts |
+| T10 | Hung/slow checker DoS of the agent loop | per-check deadline + graceful kill (02 §2.1); spawn concurrency cap (04 §4.2); one bad check isolates itself |
 
 ## 9.4 Fail-closed matrix (normative)
 
-| Condition | Invocation result | Engine |
+| Condition | Invocation result | Checker |
 |---|---|---|
-| Configured rule `deny` | native deny; hooks skipped | n/a |
-| Engine cold (spawning within deadline) | wait until `handshakeTimeoutMs` | spawn |
-| Handshake version mismatch | `onEngineError` | refuse; restart-limited |
-| `policy/check` timeout | `onEngineError` + violation | grace-kill, restart |
-| Malformed / oversize frame | `onEngineError` + violation | restart |
-| `-32001` config fatal | `onEngineError` until config fixed | unhealthy |
-| Restarts exceed window | `onEngineError` for all invocations | unhealthy |
-| Shim option invalid (`engine.*`) | plugin disabled at load + warning | n/a |
-| Project engine/policy config | ignored with warning | n/a |
-| Plugin unload (`dispose`) | in-flight → `onEngineError`; engine killed | exit |
-| Engine internal error (per command) | that command → `defaults.onError` | check still answers |
+| Configured rule `deny` | native deny; hooks never see the request | n/a |
+| Letter over cap / wrong version / bad schema | **local degrade before spawn** | not spawned |
+| Checker spawn failure (ENOENT, permission) | `onCheckerError` + debug-log note | n/a |
+| Checker timeout | `onCheckerError` | SIGTERM → grace → SIGKILL |
+| Checker exit ≠ 0 (incl. config fatal, exit 2) | `onCheckerError`; stderr line logged | n/a (stateless — every re-check fails the same way until config fixed) |
+| Garbage / multiple / oversize stdout; schema violation; wrong `invocationId` echo | `onCheckerError` | n/a |
+| Spawn concurrency exceeded | **local degrade before spawn** (no new process) | old spawns unaffected; each still deadline-bounded |
+| Hook option invalid (`checker.*`) | plugin disabled at load + warning | n/a |
+| Project checker/policy config | ignored with warning | n/a |
+| Plugin unload (`dispose`) | in-flight invocations abandoned → `onCheckerError` | SIGTERM → grace → SIGKILL |
+| Checker internal error, single command/part | that part degrades inside the verdict; aggregate still tight (most-restrictive holds) | exit 0 with a valid verdict |
 
-No row of this table can produce `allow`.
+No row of this table can produce `allow` — and no combination of rows can,
+because every degrade verdict is at most as permissive as `ask`, and `ask` is
+never turned into `allow` by the hook (I5, D9).
