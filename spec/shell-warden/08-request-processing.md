@@ -1,86 +1,101 @@
-# 08 — Stage Walk (Orchestrator)
+# 08 — Decision Pipeline (checker) & Hook Application
 
-Version 1.1 · 2026-10-31
+Version 2.0 · 2026-11-01 · Revised per [ADR-0016](../../adr/0016-two-tier-enforcement.md):
+rules vote inside the binary; the first deny is final; the hook applies
+tighten-only and owns per-session state.
 
-> Superseded in scope by [ADR-0016](../../adr/0016-two-tier-enforcement.md): retargets to the binary's decision pipeline and the hook's application duties. Rewrite pending.
-
-End-to-end behavior of `policy/check` inside the engine. The engine core is a
-pure orchestrator (ADR-0008): no parsing, no matching — only invocation of stage
-tools and composition of their verdicts.
-
-## 8.1 Pipeline
+## 8.1 Checker pipeline (per letter)
 
 ```
-validate(request)                          → -32602 on schema violation
-for each stage, in config array order:
-    if !stage.enabled:                     continue
-    ensure tool (persistent pool or spawn) — supervisor, deadlines
-    outcome = invoke(stage.tool, request, deadline)        # 06 §6.4
-    classify(outcome)                      → onError-policy or (verdict, message)
-    if verdict == deny:                    break     # the first deny stops the walk (ADR-0012)
-    if stage.exclusive:                    break     # a non-noop verdict — later stages not invoked
-aggregate(outcomes)                        → most-restrictive-wins + message per §8.3
-audit(...) + respond(result)               → 06 §6.4.3 response shape
+read letter                 → validate per 02 §2.2; violation ⇒ exit 1 (never stdout)
+load + validate config      → strict per 06 §6.1; invalid ⇒ exit 2 (no stdout)
+for each command part:
+    normalize (07 §7.4)     → any unresolvable step ⇒ part is opaque
+    split (07 §7.2)         → recursive chain split; scanner-split is NEVER trusted (0014)
+    classify (07 §7.3)      → static | opaque per part
+    for each enabled stage with matched scope (§8.2):
+        for each matching rule (§6.4/§6.5):
+            vote
+    refine (§8.3)           → discard strictly-refined matched rules
+    reduce (§8.4)           → first deny is final; else most-restrictive
+aggregate per-command → aggregate verdict (§8.4) + message (§8.5)
+write verdict JSON          → exit 0
 ```
 
-## 8.2 Invocation and outcome per stage
+All chain parts are evaluated regardless of earlier verdicts (complete
+per-part diagnostics in one pass); only rule matching inside a part may stop
+early once a deny is known.
 
-1. **Call**: write request JSON (06 §6.4.2) to the stage tool's stdin; deadline
-   = stage `tool.timeoutMs`.
-2. **Outcome** (06 §6.4.4): valid verdict, or onError.
-3. **onError** ⇒ this stage contributes the `onError` action (skip/ask/deny)
-   with no message; violation counted; **walk continues** unless the tool pool
-   is restarting (then remaining stages still run — each stage fails
-   independently; one broken tool must not disable the others).
+## 8.2 Stage entry and rule vote
 
-## 8.3 Aggregation and message composition
+1. **Scope entry**: a stage matches a part when ANY `scope.anyOf` condition
+   holds (argv token sequence or raw glob, 06 §6.3). All stages are consulted —
+   stages do not claim or exclude each other (the old `exclusive` is retired
+   with the tool walk).
+2. **Vote**: a rule votes when ALL its conditions hold for the part (conditions
+   AND). `allow`-rules vote only when the part is `static` (I10); on `opaque`
+   parts they are treated as non-matching and evaluation continues.
+3. **Short-circuit**: once a `deny` vote exists for a part, further rule
+   matching inside that part may stop — a deny cannot be out-ranked (§8.4).
 
-| Combination | Aggregate |
+## 8.3 Refinement (precise over broad)
+
+Among the matched (voting) rules of a part, a rule is **strictly refined** by
+another if the refiner's matched condition set implies the refined's on the
+same part:
+
+- `argv` token sequence S refines S′ iff S∪S′ tokens align and every token of
+  S equals S′'s or S is longer along the same prefix (level-prefix of tokens),
+  including `{anyOf}` membership;
+- flag predicates: the refiner's `flag`/`flagValue` requirements contain the
+  refined's (strictly more constrained refinement code basis: bash-guard).
+
+Refined rules are discarded before reduction, so a narrow `allow` survives the
+broad `allow` it refines and the most-restrictive reduction applies to genuinely
+competing rules only. Refinement never applies across different parts or
+stages.
+
+## 8.4 Reduction
+
+| Combination (per part) | Part verdict |
 |---|---|
-| any `deny` | `deny` — **the walk has already stopped at it** |
-| else any `ask` (incl. defaults/`onError`) | `ask` |
-| else all `allow` (≥ 1 contributing stage) | `allow` |
-| no stage contributed | `defaults.action` (top-level `defaults.action`, default `ask`) |
+| any `deny` vote | `deny` — first deny is final; its `ruleId`, `match` kind and `message` returned |
+| else any non-discarded `ask` vote | `ask` — most-obvious ask rule wins: the first surviving matched ask rule in config order |
+| else any surviving `allow` vote (part fully parsed, `static`) | `allow` |
+| else | part inherits `defaults.action` (`ask`) |
 
-**Message composition** (order = array order):
+Per-command verdict = that part's reduced verdict. Aggregate verdict =
+most-restrictive across parts (`deny > ask > allow`); the aggregate `message`
+is the message of the most-restrictive deciding part; every part that did not
+equal the aggregate keeps its own verdict in `commands[]` diagnostics.
 
-| Stage `messageMode` | Contribution to `message` |
-|---|---|
-| `append` (policy/format default) | `message = compose(message, reason)` — `existing — reason` |
-| `replace` (redirect-family) | `message = stage reason` — replaces everything accumulated |
+## 8.5 Message composition
 
-Since the walk stops at the first deny, there is never a contested
-"two deny reasons" case; `messageMode` differentiates behavior only on the
-ask path and for replacing stages.
+- **Deny**: the deciding deny rule's `message` (no composition — the first
+  deny wins; there is never a contested "two deny reasons" case).
+- **Ask**: the surviving ask rule's `message`; if no rule message, the top-level
+  `defaults.message` (06 §6.2); if neither, the hook's degrade message
+  (`defaults` level).
+- **Allow**: no message surface (the hook ignoring it is normal).
+- Messages are rule templates + allowlisted context interpolation only (I11);
+  checker/infra error text never enters `message`.
 
-## 8.4 Rejection budget (per stage, per session)
+## 8.6 Hook application duties (normative summary)
 
-Stages with a `budget` (06 §6.3) are subject to ADR-0010: the engine counts
-this stage's deny verdicts per `(stage, sessionID)` within `windowMs`; on
-exhausting `maxRejections` the stage is **bypassed** for the session (walk
-continues without it; first bypass adds the suspension notice to the message).
-Reset: stage produced a non-deny verdict, or window expired. Never auto-allow:
-bypassed stages simply do not contribute — commands fall to `defaults.action`
-(ask) or other stages.
+The hook applies the verdict per ADR-0013 reply automation (03 §3.2):
 
-## 8.5 Pseudocode
-
-```ts
-async function check(req: CheckParams, deadline: Deadline): Promise<CheckResult> {
-  assertSchema(req)
-  let verdict: Verdict = "allow", message: string | undefined
-  for (const stage of stages.filter(s => s.enabled)) {
-    const o = await invoke(stage, req, deadline)   // §8.2; onError → stage.onError
-    verdict = mostRestrictive(verdict, o.action)
-    message = composeMessage(message, o, stage.messageMode)
-    budget.charge(stage, o, req.invocation)
-    if (verdict === "deny") break                  // the first deny stops the walk (ADR-0012)
-  }
-  audit({ verdict, message, req })
-  return { invocationId: req.invocation.id, verdict, message, engine: { checkMs: elapsed() } }
-}
-```
-
-Per-stage `verdict`/`stage`/`ruleId` diagnostics are returned in
-`result.commands[]` only if the stage tool provided them; the core adds stage id
-and onError reasons.
+1. `allow` → `permission.reply("once")`; cache the verdict (03 §3.4) if
+   `cache.ttlMs > 0`.
+2. `deny` → `permission.reply("reject", message)` — message truncated to 512
+   chars, never widened.
+3. `ask` → no reply — escalation by silence; the native prompt stands.
+4. Checker anomaly (spawn failure, timeout, non-zero exit, garbage stdout,
+   schema violation) → `onCheckerError ∈ {ask, deny}` (09 §9.4); the reply API
+   NEVER synthesizes `allow` from an error.
+5. Per-session deny budget (ADR-0010, hook-owned): after `rejectBudget.maxRejections`
+   denies of the same rule for the session within `rejectBudget.windowMs`,
+   the hook stops replying for that rule (commands fall to the human). Budget
+   bookkeeping, like all session state, lives in the hook.
+6. Tighten-only (I5): an allow reply applies only to a request whose checker
+   verdict was allow; an existing native deny is unreachable here (hooks do
+   not see denied requests) and is never loosened.

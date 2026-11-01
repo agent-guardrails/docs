@@ -14,14 +14,15 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 
 ## Products
 
-> **NEXT SESSION — START HERE:** implementation plan for the engine lives in
-> [`spec/shell-warden/HANDOFF-m0.md`](spec/shell-warden/HANDOFF-m0.md) (M0: wire → config →
-> stage invocation → walk → `warden-match` → integration). Open it first.
+> **NEXT SESSION — START HERE:** implementation plan for the checker lives in
+> [`spec/shell-warden/HANDOFF-checker.md`](spec/shell-warden/HANDOFF-checker.md)
+> (v2 per ADR-0016: config loader → parser → splitter → matcher → pipeline →
+> letter/verdict IO → golden + measurement). Open it first.
 
 | Product | Spec | Schemas |
 |---|---|---|
-| `shell-warden` (engine) + `opencode-shell-warden-hook` (OpenCode V2 hook plugin) | [`spec/shell-warden/`](spec/shell-warden/README.md) | [`schemas/wire.v1.schema.json`](schemas/wire.v1.schema.json), [`schemas/shell-warden.config.v1.schema.json`](schemas/shell-warden.config.v1.schema.json) |
-| `shell-legible` (engine) + `opencode-shell-legible-hook` (planned) | — | — |
+| `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](schemas/shell-warden.letter.v1.schema.json), [`schemas/shell-warden.verdict.v1.schema.json`](schemas/shell-warden.verdict.v1.schema.json), [`schemas/shell-warden.config.v1.schema.json`](schemas/shell-warden.config.v1.schema.json) |
+| `shell-legible` (readability gate, standalone binary) + `opencode-shell-legible-hook` (planned) | — | — |
 
 ## Decisions index
 
@@ -40,6 +41,9 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0011](adr/0011-quality-gates-vote-on-review-path.md) | Quality gates vote only on the review path | Accepted |
 | [0012](adr/0012-stage-message-composition.md) | Stage message composition: `messageMode`, first-deny-stops | Accepted |
 | [0013](adr/0013-substrate-fail-closed-reply-automation.md) | Substrate is the fail-closed boundary; the hook answers published permission requests | Accepted |
+| [0014](adr/0014-payload-shape-untrusted.md) | Payload shape is untrusted; adapter normalization (referenced on the engine side in v1) | Accepted |
+| [0015](adr/0015-engine-language-rust.md) | Decision component and reference tools in Rust | Accepted |
+| [0016](adr/0016-two-tier-enforcement.md) | Two-tier enforcement: thin hook → one-shot shell-warden decision binary (supersedes 0002/0005/0007/0008) | Proposed |
 
 ## Conventions
 

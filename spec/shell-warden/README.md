@@ -1,42 +1,46 @@
 # shell-warden — Specification Set
 
-Spec v1.1 · Status: shim M0/M1 implemented (`agent-guardrails/opencode-shell-warden-hook`);
-engine config re-specified as **tool-first stages** (06/07/08 — v1.1; ADR-0008)
+Spec v2.0 · Status: retired M0 engine exists as reference (`agent-guardrails/shell-warden`);
+v2 target architecture per ADR-0016: **thin hook + one-shot decision binary**
+(`agent-guardrails/opencode-shell-warden-hook` + `shell-warden`)
 
-A two-component permission system for OpenCode V2: a **thin plugin shim** and an **orchestrator engine**
-(`shell-warden`) communicating over NDJSON JSON-RPC 2.0 on stdio. All decision logic lives in
-**stage tools**; the core walks stages and aggregates verdicts.
+A two-tier permission system for OpenCode V2: a **thin hook** (in-process plugin) and a
+**one-shot decision binary** (`shell-warden`, Rust). All decision logic lives in the
+binary: parsing, classification, rules and verdict composition. The hook owns per-session
+state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
 
 ## Documents by domain
 
 | Doc | Domain | Answers |
 |---|---|---|
 | `01-overview.md` | system | goals, non-goals, architecture, decision log |
-| `02-protocol.md` | wire | **request/response format between hook and RPC backend** |
-| `03-shim.md` | plugin | hook registrations, verdict application, supervision |
+| `02-letter-verdict.md` | one-shot contract | **letter/verdict shapes, spawn contract, exit codes** |
+| `03-shim.md` | plugin | reply automation, invoker, per-session state |
 | `04-shim-config.md` | plugin config | `opencode.jsonc` plugin options schema |
-| `05-engine-runtime.md` | backend runtime | process contract, stdio discipline, reload, termination |
-| `06-engine-config.md` | backend config | **v1.1 tool-first: stage = external tool invocation; no rule grammar in core** |
-| `07-command-parsing.md` | parsing guidance | **recommendations for stage-tool authors: classification, normalization, patterns, opaque handling** |
-| `08-request-processing.md` | backend logic | **stage walk: invocation, aggregation, message composition, budgets** |
+| `05-engine-runtime.md` | — | **retired** (persistent engine); pointers only |
+| `06-engine-config.md` | rules grammar | **flat stages/rules grammar of the checker (v1)** |
+| `07-command-parsing.md` | parsing | **normative**: normalization, chain split, classification, vocabulary |
+| `08-request-processing.md` | decision pipeline | **match, refine, reduce; first deny final; hook duties** |
 | `09-security.md` | security | invariants, threat model, fail-closed matrix |
-| `10-testing.md` | quality | contract, golden, integration suites |
+| `10-testing.md` | quality | golden (checker), contract (hook), integration; live-smoke history |
 | `11-roadmap.md` | delivery | milestones, open questions |
-| `../../design/shell-legible-gate.md` | design | readability gate reference tool (L1–L3, budget) |
-| `../../schemas/*.json` | machine | JSON Schema drafts: wire v1, engine config v1.1 |
+| `../../design/shell-legible-gate.md` | design | readability gate, standalone binary (ADR-0007 superseded 0007: separate project) |
+| `../../schemas/*.json` | machine | JSON Schema drafts: letter v1, verdict v1, checker config v1 |
 
 ## Reading order
 
 1. `01-overview.md` — what and why
-2. `02-protocol.md` — the contract between the two parts
-3. Backend side, in dependency order: `06-engine-config.md` → `07-command-parsing.md` → `08-request-processing.md` → `05-engine-runtime.md`
-4. Shim side: `03-shim.md` → `04-shim-config.md`
+2. `02-letter-verdict.md` — the contract between the two tiers
+3. Checker side, in dependency order: `06-engine-config.md` → `07-command-parsing.md` → `08-request-processing.md`
+4. Hook side: `03-shim.md` → `04-shim-config.md`
 5. Cross-cutting: `09-security.md`, `10-testing.md`, `11-roadmap.md`
 
 ## Conventions
 
 - Normative keywords MUST / SHOULD / MAY per RFC 2119.
-- **Shim** = OpenCode V2 plugin part (`@opencode/plugin`, in-process). **Engine** = `shell-warden` orchestrator process. **Stage tool** = external program invoked by the engine for one stage.
+- **Hook** = OpenCode V2 plugin part (`opencode-shell-warden-hook`, in-process; the v1.x docs
+  called it *shim*). **Checker** = `shell-warden`, the one-shot decision binary from the
+  `shell-warden` repository. **Letter / verdict** = the request/response JSON of 02.
 - All durations are integer milliseconds. All budget clamps are enforced with warn+clamp, never silently.
-- Spec changes: bump the doc version and the relevant `protocolVersion` / config `version`.
-- Revision status: 02, 04, 06, 07, 08 = v1.1 (tool-first). 03, 05, 09, 10, 11 — minor revision pending (v1.0 wording).
+- Spec changes: bump the doc version and the relevant `version` field of the matching schema.
+- Revision status: all of 01–04, 06–11 revised to v2.0 (ADR-0016); 05 retired.

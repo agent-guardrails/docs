@@ -1,54 +1,70 @@
-# 07 — Parsing: Guidance for Stage-Tool Authors
+# 07 — Parsing (normative for the decision binary)
 
-Version 1.1 · 2026-10-31
+Version 2.0 · 2026-11-01 · Re-targeted per [ADR-0016](../../adr/0016-two-tier-enforcement.md):
+this is the normative parsing guide of the checker; harness-supplied splitting
+is never trusted (0014's principle, enforced inside the binary).
 
-> Re-targeted by [ADR-0016](../../adr/0016-two-tier-enforcement.md): this guidance becomes the normative parsing guide of the decision binary (no external stage tools). Rewrite pending.
-
-Since v1.1 the engine core does **no command parsing** (ADR-0008). Every stage
-tool receives the raw command and parses it itself. This document is guidance:
-**normative for the reference tools** (`warden-match`, `warden-legible`),
-recommended for third-party tools.
+Parsing is the checker's own and complete (ADR-0016): normalization, AST-level
+chain splitting, per-part classification and flag recognition all live here.
+The checker is fast and deterministic, not intelligent — it guarantees the
+human sees commands in a form they can parse at a glance; it never judges
+semantics.
 
 ## 7.1 Input contract
 
-Per invocation the tool receives on stdin (06 §6.4.2):
+Per check the binary reads one letter from stdin (02 §2.2):
 
 ```json
-{ "protocolVersion": 1,
-  "command": { "raw": "curl -s api.example.com", "cwd": "/work/repo" },
-  "session": { "id": "ses_…", "agent": "build" },
-  "mcp": [ { "name": "http", "status": "connected" } ] }
+{ "version": 1,
+  "invocation": { "id": "msg:call", "sessionID": "ses…", "projectDir": "/work/repo" },
+  "action": "shell",
+  "commands": [ { "index": 0, "raw": "curl -s api.example.com", "cwd": "/work/repo" } ] }
 ```
 
-- `command.raw` — command text exactly as OpenCode produced it. The native
-  OpenCode scanner has already split compound commands into subcommands and
-  refuses to execute what it cannot analyze — but **re-parse defensively**:
-  never assume the split is complete.
-- `command.cwd` — session working directory.
-- Host-session context (e.g., `CI`) reaches the tool through its **inherited
-  process environment** (`tool.env` patch + chain inheritance, 06 §6.4.1) —
-  there is no separate data channel, and the environment the command will
-  execute with is unknowable at decision time by design.
+- `commands[].raw` — command text exactly as OpenCode produced it. The native
+  OpenCode scanner pre-splits compound commands, but the checker MUST re-parse
+  from `raw` and never assume that split is complete or truthful (§7.2).
+- `commands[].cwd` / `invocation.projectDir` — path base for `paths` conditions.
+- No other context exists: the checker spawns with an empty environment and
+  performs no lookups (no git/env/time context in v1, ADR-0016/N6).
 
-## 7.2 Classification: `static` vs `opaque`
+## 7.2 Chain splitting (normative, recursive)
 
-Every command is classified before verdict production:
+Each part is split into sub-parts the command would actually execute:
+
+1. **Operators**: `|`, `&&`, `;`, `&`, `||` split top-level first (respecting
+   quoting).
+2. **Wrappers/interpreters** (recursively into their operands): `bash -c`,
+   `sh -c`, `sudo`, `env`, `nohup`, `xargs`, `timeout` — the wrapped command is
+   evaluated on its own as a part.
+3. **Substitutions**: `$(…)`, backticks — the inner text is a part.
+4. **Redirects and their targets** are recorded as path evidence (§7.4), not
+   dropped: `rm -f /tmp/x > /etc/passwd` produces a part with both paths.
+
+Every produced part carries its own raw text and evaluated independently
+(08 §8.1). The letter's split (multiple `commands[]` entries) is replicated as
+parts but never trusted to be complete — a single `raw` containing chains is
+split here too.
+
+## 7.3 Classification: `static` vs `opaque`
+
+Every part is classified before verdict production:
 
 | Class | Meaning |
 |---|---|
 | `static` | Fully analyzable after normalization: literal tokens, wholly-static quoting, no expansions |
-| `opaque` | Contains constructs the tool refuses to resolve: `$(`, backticks, `${`, `$VAR`, process substitution, residual operators (`\|`, `&&`, `;`) after the scanner split |
+| `opaque` | Contains constructs the checker refuses to resolve: `$(`, backticks, `${`, `$VAR`, process substitution, arithmetic `$((`, brace expansion, residual operators after §7.2 splitting |
 
 **Normative rule (fail-closed matching):** an `allow` verdict may originate
-ONLY from a rule matched against a `static` command. `deny`/`ask` MAY match any
-classification. On `opaque`, allow-rules are treated as non-matching and the
-walk continues — the command degrades toward `ask`, never silently runs.
+ONLY from a rule matched against a `static` part (and, in the aggregate, from
+fully parsed evidence overall). `deny`/`ask` MAY match any classification. On
+`opaque`, allow-rules are treated as non-matching and evaluation continues —
+the command degrades toward `ask`, never silently runs.
 
-Rationale: the tool is fast and deterministic, not intelligent. It cannot judge
-whether an encoded string is dangerous — it only guarantees the human sees
-commands in a form they can parse at a glance.
+Rationale: the checker only guarantees legibility for the human, not safety —
+anything it cannot show plainly is escalated (ADR-0001/0016 posture).
 
-## 7.3 Normalization recommendations (for `static` classification)
+## 7.4 Normalization (for `static` classification)
 
 Light pipeline, in order; any unresolvable step ⇒ `opaque`:
 
@@ -56,29 +72,34 @@ Light pipeline, in order; any unresolvable step ⇒ `opaque`:
 2. Decode **wholly-static** quoting only (`'…'`, `"…"` without expansions).
 3. Expansion scan ⇒ opaque on: `$(`, backticks, `${`, `$VAR`, process
    substitution, arithmetic `$((`, brace expansion.
-4. Operator scan ⇒ opaque on any residual `|`, `&&`, `;`, `&`, redirections
-   (the OpenCode scanner should have split these; seeing them means the input is
-   outside the assumed contract).
+4. Operator scan ⇒ opaque on any residual operators after the §7.2 split
+   (their presence means the input is outside the assumed contract).
 5. Strip env-prefix assignments (`FOO=1 cmd` → record, exclude from argv).
 6. Tokenize on whitespace respecting decoded quoting; token 0 = command word.
+7. **Path evidence**: for `paths` conditions — argument tokens that lexically
+   look like paths (absolute, `~`, `./`, `../`, or referenced by a flag with
+   whitespace arity), lexically canonicalized; symlinks are NOT resolved
+   (documented limitation; `within` checks are advisory for hostile layouts).
+   Redirection targets (§7.2 step 4) join this set.
 
-## 7.4 Matching vocabulary
+## 7.5 Matching vocabulary
 
 - **Glob on raw string** (OpenCode-compatible): `*` = zero+ chars incl. spaces;
   `?` = one char; trailing `" *"` also matches the bare command
   (`git status *` matches `git status` too).
 - **Token prefix** (`argv: ["git","push"]`): ordered equality on the first N
-  tokens of the token sequence.
+  tokens of the token sequence (06 §6.4).
 - **Flags**: base-flag identity (`-x`, `--long`, `--long=value` → base +
-  inline value); arity declared per stage/tool config; `--` terminates flags.
-- **Path conditions** (optional): lexical canonicalization only — symlinks are
-  NOT resolved (documented limitation; `within` checks are advisory for hostile
-  layouts).
+  inline value); arity declared in the stage's `flags` table (06 §6.3); `--`
+  terminates flags.
 
-## 7.5 Verdict hygiene
+## 7.6 Verdict hygiene
 
 - `allow` ⇒ only `static`, only fully-analyzed constructs (I10).
 - `deny`/`ask` messages MUST be prescriptive: tell the agent what to do
-  ("call commands directly, without bash -c"), not just what failed. Budgeted
-  rejection (ADR-0010) assumes one iteration usually suffices.
+  ("push to a branch and open a PR", "call commands directly, without bash -c"),
+  not just what failed. Hook-side deny budgets (ADR-0010) assume one iteration
+  usually suffices.
 - `facts` ≤ 16 KiB, depth ≤ 8, no secrets (I6).
+- Messages: rule templates + allowlisted interpolation only (I11); checker
+  error text never enters `message` (02 §2.4).

@@ -1,55 +1,66 @@
 # 10 — Testing Strategy
 
-Version 0.1 · 2026-10-30
+Version 2.0 · 2026-11-01 · Re-targeted per [ADR-0016](../../adr/0016-two-tier-enforcement.md):
+golden coverage of the checker (letter → verdict) without a harness; hook
+contract against a scripted mock binary.
 
 ## 10.1 Suites
 
 | Suite | What | Where | Needs OpenCode |
 |---|---|---|---|
-| Contract (shim) | shim vs a **mock engine** (scripted stdio): handshake success / version mismatch / timeout; check pass, fail, malformed, oversize, late; violation ladder → unhealthy; tighten-only proof; cache TTL + invalidation; dispose kill | `tests/contract` | no |
-| Golden (engine) | `shell-warden check --file request.json` CLI mode: request JSON in → response JSON out; table-driven over `examples/configs` | `tests/golden` | no |
-| Parsing unit | classification + normalization + glob/flag/path semantics per `07-command-parsing.md` examples table and edge cases | `tests/golden/parsing` | no |
-| Config validation | valid/invalid `shell-warden.jsonc` fixtures; last-good and fatal paths | `tests/contract` | no |
-| Integration | real OpenCode: allowlist scenario, deny with visible reason in native prompt, `onEngineError: "deny"` drill (SIGSTOP engine), project-config-ignored warning, hot config reload | `tests/integration` (manual/CI with `opencode run`) | yes |
+| Golden (checker) | `shell-warden` CLI: letter JSON in → verdict JSON out; table-driven over `examples/configs` | `tests/golden` | no |
+| Parsing unit | classification + normalization + chain split + glob/flag/path semantics per 07 examples and edge cases | `tests/golden/parsing` | no |
+| Config validation | valid/invalid rules-file fixtures; strict rejection of unknown fields/caps | `tests/config` | no |
+| Contract (hook) | hook vs a **mock checker** (scripted binary): spawn success/fail, timeout kill + grace, garbage/oversize/empty stdout, non-zero exits (incl. 2), schema-violating verdict, wrong `invocationId` echo, concurrency cap, tighten-only proof, cache TTL, deny budget | `tests/contract` | no |
+| Integration | real OpenCode: allowlist scenario, deny with visible reason in native prompt, `onCheckerError: "deny"` drill (non-spawnable checker path), project-config-ignored warning | `tests/integration` (manual/CI with `opencode run`) | yes |
 
 ## 10.2 Golden format
 
 ```jsonc
-// tests/golden/cases/push-protected.json
+// tests/golden/cases/vcs-no-force-push.json
 {
   "config": "examples/configs/shell-warden.example.jsonc",
-  "request": { "invocation": { "id": "t1", "sessionID": "s1", "agent": "build",
-                "hook": "permission.evaluate", "projectDir": "/repo" },
-               "action": "shell",
-               "commands": [{ "index": 0, "raw": "git push origin main", "cwd": "/repo" }] },
-  "expect": { "verdict": "deny", "messageContains": "protected",
-              "commands": [{ "index": 0, "verdict": "deny", "stage": "s1",
-                             "ruleId": "s1/no-push-protected", "classification": "static" }] }
+  "letter": { "version": 1,
+              "invocation": { "id": "t1", "sessionID": "s1", "projectDir": "/repo" },
+              "action": "shell",
+              "commands": [{ "index": 0, "raw": "git -C sub push --force origin main", "cwd": "/repo" }] },
+  "expect": { "verdict": "deny", "messageContains": "forbidden",
+              "commands": [{ "index": 0, "verdict": "deny", "ruleId": "vcs/no-force-push",
+                             "match": "argv" }] }
 }
 ```
 
-Runner diffs actual vs `expect` (subset match; extra fields ignored). Every rule in every example config MUST have
-at least one positive and one negative case.
+Runner diffs actual vs `expect` (subset match; extra fields ignored). Every rule in every example
+config MUST have at least one positive and one negative case. Spawn latency is measured here too
+(§10.6).
 
 ## 10.3 Required adversarial cases
 
 | Case | Expected |
 |---|---|
 | `echo $(whoami)` against an allow rule for `echo *` | `ask` (opaque ⇒ allow inert) — I10 |
-| `git status; rm -rf /` (residual operator) | opaque; no allow; deny-patterns still evaluated on raw |
-| engine writes a 1 MiB line | violation + restart; invocation degraded |
-| engine answers after deadline | degraded; late answer ignored (id poisoned) |
-| duplicate `invocation.id` re-check | idempotent, same verdict |
-| config reload mid-session with narrower rules | next check uses new rules; caches invalidated |
-| SIGSTOP engine → deadline breach ×3 | unhealthy; all checks `onEngineError` |
+| broad `push → allow` refined by narrow `push --all → ask` on `git push --all` | refinement discards the broad rule; `ask` survives and wins (08 §8.3); plain `git push` still `allow` |
+| `git status; rm -rf /` (chain in one raw) | split into parts; the `rm` part determines the aggregate; parts recorded in `commands[]` |
+| `bash -c 'git push --force'` on twinned `git` rules | wrapper unwrapped (07 §7.2); same verdicts as the direct command |
+| letter > 64 KiB / > 32 commands | hook degrades locally, no spawn — I4 |
+| unknown flag vs allow rule (`git status --stealth-x`) | unknown flag ⇒ not fully parsed ⇒ `ask` (I10) |
+| hook receives verdict with foreign `invocationId` | degrade — I7 |
+| hook receives two JSON values on stdout | degrade |
+| rules file with `defaults.action: "allow"` | config invalid, exit 2, checker degrades — never fail-open |
+| deny budget: 4th deny of the same rule | hook silent; request to human (ADR-0010) |
+| stale allow after rules tightening | uncached next check sees new rules; cached allow bounded by TTL — I9 |
 
 ## 10.4 Contract harness requirements
 
-- Mock engine configurable per test: scripted responses, delays, oversize frames, crash timing.
+- Mock checker configurable per test: scripted verdicts, delays, garbage frames, exit codes, hang.
 - Deterministic: no wall-clock in assertions (inject clock), no port binding (stdio only).
-- Coverage gates: shim statements ≥ 90%; every I3 row of `09-security.md` §9.4 exercised by at least one test.
+- Coverage gates: hook statements ≥ 90%; every I3 row of `09-security.md` §9.4 exercised by at
+  least one test.
 
 ## 10.5 Integration smoke — first live run (2026-10-31, OpenCode v2.2.2)
+
+Historical record — findings that shaped ADR-0013 and later ADR-0016; the setup described
+(mock **persistent engine**, evaluate hook) is the retired v1 architecture.
 
 Setup: smoke project with `permissions: [shell → ask]` substrate + the shim
 (local dir) + mock engine (persistent, deny `rm -rf`, allow the rest); headless
@@ -61,31 +72,19 @@ Setup: smoke project with `permissions: [shell → ask]` substrate + the shim
 | evaluate hook fires for shell commands | ✅ event shape confirmed: `{action: "shell", effect: "ask", resources: ["…"]}` |
 | Wire E2E: shim → engine spawn → handshake → policy/check | ✅ first call ~215 ms (spawn+handshake), cached 3 ms — persistent pool works live |
 | Deny path | ✅ `permission.rejected: denied by mock` reaches the agent with the reason; command not executed |
-| **Allow path** | ❌ **hook allow does not suppress a configured ask on v2.2.2** — retested with a pure-V2 `permissions` config (V1 `permission` block removed): same result. Deny escalations are honored, allow-downgrades are not. Next: retest on v2.2.5 (released 2026-10-30); fallback M1: auto-answer published asks via `permission.reply` when the engine pre-approved the invocation; if v2.2.5 still ignores hook allow — upstream issue |
-| `ctx.session.get` inside the evaluate hook | ❌ **deadlock** — re-entrant HTTP into the server during permission evaluation; hook hangs forever, ask auto-rejects. Removed from the hot path; M1: session-event cache |
-| Auxiliary model calls (title/summary) in headless run | ⚠️ fail auth ("User not found") — unrelated to the shim |
+| **Allow path** | ❌ **hook allow does not suppress a configured ask on v2.2.2** → superseded by ADR-0013 reply automation (implemented and smoke-tested) |
+| `ctx.session.get` inside the evaluate hook | ❌ **deadlock** — re-entrant HTTP into the server during permission evaluation. Removed from the hot path; M1: session-event cache (03 §3.2) |
+| Auxiliary model calls (title/summary) in headless run | ⚠️ fail auth ("User not found") — unrelated to the plugin |
 
-Open protocol addition: `policy/check` request gains `context.env` — the
-allowlisted host variables read by the shim (the engine process itself is
-spawned empty and cannot see the host env; it only relays the fields).
+The §10.5.1 open question of v1.x (hook **ask** escalation on a native-allow
+substrate) is resolved by construction of ADR-0013: the hook never escalates —
+unanswered asks reach the human through the reply-automation silence.
 
-### 10.5.1 Open question — ask-escalation on native-allow substrate (untested)
+## 10.6 Golden measurement (one-shot latency, before M1 merge)
 
-Architecture flip (substrate `shell → allow`, engine denies/asks what's
-dangerous) removes the ask→allow limitation entirely — IF hook **ask**
-escalation publishes a prompt on a native-allow substrate. Confirmed this
-session: hook **deny** works on native-allow. Untested: hook **ask**.
-
-Procedure (next session, ~5 min):
-1. Smoke project (temp dir or recreate per 10.5): substrate allow,
-   stage tool = `mock-escalate.mjs` (returns ask for everything), plugin
-   installed.
-2. Reload check: `tail -2 $SMOKE/probe.log` — must show `setup begin` with the
-   escalate engine BEFORE testing (reload trigger is finicky: config touch and
-   src edits both work but not reliably; verify before proceeding).
-3. `opencode run "run exactly this command: echo warden-escalation-test"`:
-   - echo does NOT execute (+ auto-reject prompt) → escalation works →
-     architecture confirmed, proceed to engine M0;
-   - echo executes → hook ask does not escalate on allow-substrate → v1.1
-     reduces to deny-only engine; escalation needs the M1 `permission.reply`
-     automation instead.
+ADR-0016 accepted the per-check spawn on a measured basis
+("spawn ≪ the guarded command's runtime"). The golden runner records
+`spawnMs` / `checkMs` per case; M1 acceptance requires the p95 total check
+budget ≤ 10 ms on the reference machine, and re-measurement on the board P3
+hardware before the hook ships configured with the default
+`checkTimeoutMs: 2000`.
