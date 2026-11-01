@@ -14,6 +14,10 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 
 ## Products
 
+> **NEXT SESSION — START HERE:** implementation plan for the engine lives in
+> [`spec/shell-warden/HANDOFF-m0.md`](spec/shell-warden/HANDOFF-m0.md) (M0: wire → config →
+> stage invocation → walk → `warden-match` → integration). Open it first.
+
 | Product | Spec | Schemas |
 |---|---|---|
 | `shell-warden` (engine) + `opencode-shell-warden-hook` (OpenCode V2 hook plugin) | [`spec/shell-warden/`](spec/shell-warden/README.md) | [`schemas/wire.v1.schema.json`](schemas/wire.v1.schema.json), [`schemas/shell-warden.config.v1.schema.json`](schemas/shell-warden.config.v1.schema.json) |

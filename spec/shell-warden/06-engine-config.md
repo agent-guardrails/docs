@@ -218,7 +218,14 @@ cannot deny the agent forever:
 
 Both are ordinary stage tools; the core contains none of their logic.
 
-## 6.8 Profiles
+## 6.8 Engine CLI
+
+- `shell-warden serve [--config FILE]` — NDJSON loop on stdio (the hook path; default mode).
+- `shell-warden check --config FILE --file REQ.json` — single-shot: prints the result JSON (golden mode, 10 §10.2).
+- Config default path: `~/.config/shell-warden/config.jsonc` (§6.1).
+- Implementation language: Rust (ADR-0015).
+
+## 6.9 Profiles
 
 Enabling/disabling families — via the `enabled` flags of stages:
 
