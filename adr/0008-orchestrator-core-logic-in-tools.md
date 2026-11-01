@@ -1,6 +1,6 @@
 # 0008 — Engine core is a pure orchestrator; decisions live in stage tools
 
-* **Status:** Accepted (2026-10-31)
+* **Status:** Superseded by [0016 — Two-tier enforcement](0016-two-tier-enforcement.md) (2026-11-01)
 * **Deciders:** preved911
 * **Related:** [spec/shell-warden/06](../spec/shell-warden/06-engine-config.md), [07](../spec/shell-warden/07-command-parsing.md), [08](../spec/shell-warden/08-request-processing.md)
 

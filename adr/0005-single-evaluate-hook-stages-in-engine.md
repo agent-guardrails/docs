@@ -1,6 +1,6 @@
 # 0005 — Single evaluate hook; stages live in the engine
 
-* **Status:** Accepted (2026-10-31)
+* **Status:** Superseded by [0016 — Two-tier enforcement](0016-two-tier-enforcement.md) (2026-11-01)
 * **Deciders:** preved911
 * **Related:** [spec/shell-warden/08-request-processing.md](../spec/shell-warden/08-request-processing.md) (§8.2 stage walk)
 
