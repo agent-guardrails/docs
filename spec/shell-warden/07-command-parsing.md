@@ -88,7 +88,9 @@ Light pipeline, in order; any unresolvable step ⇒ `opaque`:
   `?` = one char; trailing `" *"` also matches the bare command
   (`git status *` matches `git status` too).
 - **Token prefix** (`argv: ["git","push"]`): ordered equality on the first N
-  tokens of the token sequence (06 §6.4).
+  tokens of the **stage tail** — the tokens that remain after the stage's
+  scope argv prefix is consumed and flags with their consumed arity values are
+  removed (06 §6.4).
 - **Flags**: base-flag identity (`-x`, `--long`, `--long=value` → base +
   inline value); arity declared in the stage's `flags` table (06 §6.3); `--`
   terminates flags.

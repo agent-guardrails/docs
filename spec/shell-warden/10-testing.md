@@ -30,8 +30,11 @@ contract against a scripted mock binary.
 }
 ```
 
-Runner diffs actual vs `expect` (subset match; extra fields ignored). Every rule in every example
-config MUST have at least one positive and one negative case. Spawn latency is measured here too
+Runner diffs actual vs `expect` (subset match; extra fields ignored; an
+expected element carrying an `index` anchors to the actual element at that
+position of the parent array; `expect.message` supports a `contains:` prefix
+for substring assertions). Every rule in every example config MUST have at
+least one positive and one negative case. Spawn latency is measured here too
 (§10.6).
 
 ## 10.3 Required adversarial cases
