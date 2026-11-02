@@ -3,6 +3,14 @@
 This repository is the canonical knowledge base: ADRs (decisions), specifications (normative
 contracts), schemas (machine-readable contract). Genres are separated — see README.md.
 
+## Workflow
+
+Per the org rules ([agent-guardrails/.github/AGENTS.md](https://github.com/agent-guardrails/.github/blob/main/AGENTS.md)):
+- every non-trivial change starts with a GitHub issue in this repo, linked to the
+  ["Agent Guardrails Roadmap"](https://github.com/orgs/agent-guardrails/projects/1) project;
+- reference the issue in commits and PRs (`Closes #123`) and move the issue to Done on merge;
+- **all changes land via pull requests** — never push directly to the default branch.
+
 ## When to update what
 
 - **Implementation behavior changed** (protocol, budgets/clamps, config semantics, security
