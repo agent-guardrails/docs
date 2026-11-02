@@ -21,7 +21,7 @@ as a retired reference. v2 rebuilds the system on two tiers.
 1. Grammar types + config loader + validation fixtures (06 ⇄ schema)
 2. Normalizer + classifier (07 §7.3–7.4) — unit-heavy, highest risk
 3. Recursive chain splitter (07 §7.2) — golden cases per construct
-4. Matcher: flag table + token/glob/flagValue/paths conditions (06 §6.4–6.5)
+4. Matcher: flag table + `argv`/`argValue`/`pattern` conditions (06 §6.4–6.5)
 5. Pipeline: refinement → first-deny/reduction → message (08)
 6. Letter/verdict IO + CLI + exit codes (02)
 7. Golden runner + measurement (10)

@@ -96,32 +96,12 @@
         "action": { "enum": ["allow", "ask", "deny"] },
         "message": { "type": "string", "minLength": 1, "maxLength": 512 },
         "argv": { "$ref": "#/definitions/argvSequence" },
-        "argvAt": {
+        "argValue": {
           "type": "array",
           "minItems": 1,
-          "maxItems": 8,
-          "items": {
-            "type": "object",
-            "required": ["at", "one"],
-            "additionalProperties": false,
-            "properties": {
-              "at": { "type": "integer", "minimum": 0 },
-              "one": {
-                "oneOf": [
-                  { "type": "string", "minLength": 1 },
-                  {
-                    "type": "object",
-                    "required": ["anyOf"],
-                    "additionalProperties": false,
-                    "properties": {
-                      "anyOf": { "type": "array", "minItems": 1, "maxItems": 16, "items": { "type": "string", "minLength": 1 } }
-                    }
-                  }
-                ]
-              }
-            }
-          }
-        },
+          "maxItems": 16,
+          "items": { "type": "string", "minLength": 1, "maxLength": 512 },
+          "$comment": "Positional-argument value predicates (the mirror of flagValue): matches when ANY listed glob matches ANY positional token of the stage tail (OR over globs, exists over positions). Globs are OpenCode-compatible on the decoded token text; no token interpretation in v1 (ADR-0016 N6)." },
         "pattern": { "type": "string", "minLength": 1, "maxLength": 512 },
         "classification": { "enum": ["static", "opaque"] },
         "flag": {

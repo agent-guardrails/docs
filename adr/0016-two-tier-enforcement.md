@@ -66,10 +66,14 @@ budgets, no audit channel — it is a pure function of the letter and its config
 - **Config** is a user-global rules file (0003 posture): v1.0-flat grammar —
   `stages` (family `scope` with `anyOf` of `argv`/`pattern`, plus the family
   flag-arity table) and **flat rules** (no `when` wrapper): conditions
-  `argv` / `argvAt` / `pattern` / `classification` / `flag(present|absent)` /
-  `flagValue` / `paths` carried directly on the rule next to `action` and
-  optional `message`. Three verdicts `allow | ask | deny`; `defaults.action`
-  is always `ask`; unknown fields fail validation. No `cacheTtl` anywhere.
+  `argv` / `argValue` / `pattern` / `classification` /
+  `flag(present|absent)` / `flagValue` carried directly on the rule next to
+  `action` and optional `message`. Three verdicts `allow | ask | deny`;
+  `defaults.action` is always `ask`; unknown fields fail validation. No
+  `cacheTtl` anywhere. *(Amended 2026-11-02 during the M1 implementation
+  review: the dedicated `paths` condition and positional `argvAt` are folded
+  into `argValue` — an array of globs over positional tokens, the mirror of
+  `flagValue`; token-semantic interpretation stays out of v1 per N6.)*
 - **Matching semantics.** A stage enters on `scope`; all its matching rules
   vote; verdict-wise **the first deny is final** — nothing later can out-rank
   it, and rule matching may short-circuit once a deny is known. Absent denies,

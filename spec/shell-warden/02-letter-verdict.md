@@ -46,7 +46,7 @@ bytes, multiple JSON values, or a wrong `letter.version` are checker/harness def
 | `invocation.id` | yes | `${messageID}:${callID}` from the permission request source; unique per tool call; budget/cache key |
 | `invocation.sessionID` | yes | session scope (hook-side budgets, cache key) |
 | `invocation.agent` | no | agent that requested execution (debug log only in v1) |
-| `invocation.projectDir` | no | project root for `paths` conditions (06 §6.3) |
+| `invocation.projectDir` | no | carried for the harness and v2 semantic layers; unconsumed by the v1 grammar (06 §6.4) |
 | `action` | yes | permission action string (`"shell"` in v1); hook forwards only configured `actions` |
 | `commands`.index | yes | 0-based, matches verdict indexing |
 | `commands`.raw | yes | command text exactly as OpenCode produced it; ≤ 8 KiB each |

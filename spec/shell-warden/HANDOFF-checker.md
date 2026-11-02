@@ -25,7 +25,7 @@ Rust toolchain installed on the dev machine (M0 session used it); start `cargo c
 | 1 | Grammar types + config loader | 06 + config schema: strict validation, unknown field ⇒ invalid, caps; golden fixtures for invalid configs |
 | 2 | Normalizer + classifier | 07 §7.3–7.4; unit-heavy: each unresolvable step ⇒ opaque; table-driven cases |
 | 3 | Recursive chain splitter | 07 §7.2; golden case per construct (operators, wrappers, substitutions, redirects); never trust the letter's split |
-| 4 | Matcher: flags table, conditions | 06 §6.4–6.5 + schema; argv/argvAt/pattern/flag/flagValue/paths per 07 §7.5 |
+| 4 | Matcher: flags table, conditions | 06 §6.4–6.5 + schema; argv/argValue/pattern/flag/flagValue per 07 §7.5 (stage-anchor tail; argValue = flat glob array, the positional mirror of flagValue) |
 | 5 | Pipeline: refinement → first-deny → reduction → message | 08 §8.2–8.5; refinement unit tests (bash-guard code as reference) |
 | 6 | Letter/verdict IO + CLI | 02 + schemas; exit codes 0/1/2; schema-conformance both directions |
 | 7 | Golden runner + measurement | 10 §10.2/§10.6; every rule ≥ 1 positive + negative case; p95 ≤ 10 ms gate |

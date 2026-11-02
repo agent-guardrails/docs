@@ -24,7 +24,9 @@ Per check the binary reads one letter from stdin (02 §2.2):
 - `commands[].raw` — command text exactly as OpenCode produced it. The native
   OpenCode scanner pre-splits compound commands, but the checker MUST re-parse
   from `raw` and never assume that split is complete or truthful (§7.2).
-- `commands[].cwd` / `invocation.projectDir` — path base for `paths` conditions.
+- `commands[].cwd` / `invocation.projectDir` — carried for the harness and
+  v2 semantic layers; the v1 grammar performs no path interpretation
+  (`argValue` compares decoded token text, ADR-0016 N6).
 - No other context exists: the checker spawns with an empty environment and
   performs no lookups (no git/env/time context in v1, ADR-0016/N6).
 
@@ -76,11 +78,7 @@ Light pipeline, in order; any unresolvable step ⇒ `opaque`:
    (their presence means the input is outside the assumed contract).
 5. Strip env-prefix assignments (`FOO=1 cmd` → record, exclude from argv).
 6. Tokenize on whitespace respecting decoded quoting; token 0 = command word.
-7. **Path evidence**: for `paths` conditions — argument tokens that lexically
-   look like paths (absolute, `~`, `./`, `../`, or referenced by a flag with
-   whitespace arity), lexically canonicalized; symlinks are NOT resolved
-   (documented limitation; `within` checks are advisory for hostile layouts).
-   Redirection targets (§7.2 step 4) join this set.
+7. **No path-evidence channel**: the v1 grammar has no path-coordinate conditions (`argValue` compares decoded token text); how tokens relate to filesystem locations is a v2 semantic layer (§11.3 Q6). Redirection targets are recorded (§7.2 step 4) and are visible only to raw `pattern`.
 
 ## 7.5 Matching vocabulary
 
