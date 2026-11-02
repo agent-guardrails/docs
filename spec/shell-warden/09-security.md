@@ -42,7 +42,7 @@ Version 2.0 · 2026-11-01 · Revised per [ADR-0016](../../adr/0016-two-tier-enfo
 | T6 | Injection via `event.message` into prompts | messages only from rule templates + allowlisted interpolation (I11); checker/infra errors never surfaced |
 | T7 | Stale cached allow after rules change | uncached checks re-read config every spawn; cached allows bounded by hook TTL; denies never cached (I9) |
 | T8 | Secrets leakage via letter/verdict/debug log | letter contains command text + ids + cwd + agent only; checker environment empty; payload caps (I6); debug dir outside projects (03 §3.5) |
-| T9 | Symlink trickery against `within` path checks | lexical canonicalization only in v1 — documented limitation; treat paths conditions as advisory for hostile layouts |
+| T9 | Value globs steering by filesystem meaning | v1 `argValue` compares decoded token text only — no canonicalization (no symlink/cwd-resolving; `/repo/./x` ≠ `/repo/x`); token-semantic interpretation is a v2 layer (§11.3 Q6) |
 | T10 | Hung/slow checker DoS of the agent loop | per-check deadline + graceful kill (02 §2.1); spawn concurrency cap (04 §4.2); one bad check isolates itself |
 
 ## 9.4 Fail-closed matrix (normative)

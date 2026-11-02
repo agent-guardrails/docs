@@ -76,12 +76,21 @@ pipeline or is hook-owned, 03/08).
 
 ## 6.4 Matching primitives
 
+Rules and scope conditions operate on the **stage tail** — the argv tokens
+that remain after the stage's `scope` argv prefix is consumed (the scope
+anchor; stages whose scope matched only by `pattern` anchor at 0) and after
+flag tokens with their consumed arity values are removed. The anchor is the
+length of the stage's matched `argv` scope condition — a property of the
+stage, not of which branch matched — so `docker run …` anchors identically
+under `argv ["docker"]` and under `pattern "docker *"`. `git -C sub push` in
+the `vcs` stage (`scope argv ["git"]`, `-C: 1`) yields the tail `push …` — a
+rule `argv: ["push"]` matches the tail, not the raw token positions.
+
 | Primitive | Semantics |
 |---|---|
-| `argv` tokens | ordered equality on token positions; strings compare literally; `{anyOf}` matches one of the alternatives; tokens MUST match contiguously from left to right |
+| `argv` tokens | ordered equality on the stage tail (see above); strings compare literally; `{anyOf}` matches one of the alternatives; tokens MUST match contiguously from left to right |
 | `pattern` | glob on the **raw** string (OpenCode-compatible): `*` = zero+ chars incl. spaces; `?` = one char; trailing `" *"` also matches the bare command (`git status *` matches `git status` too) |
-| flag recognition | base-flag identity: `-x`, `--long`, `--long=value` → base flag + inline value; arity N ⇒ the next N tokens are values; `--` terminates flag parsing (rest = positional) |
-| paths | lexical canonicalization only — symlinks are NOT resolved (documented limitation, T9); `within` checks are advisory for hostile layouts |
+| flag recognition | base-flag identity: `-x`, `--long`, `--long=value` → base flag + inline value; arity N ⇒ the next N tokens are values; `--` terminates flag parsing (rest = positional): a flag base that is NOT in the stage's `flags` table is an **unknown flag** — it remains visible as a positional and blocks fully-parsed status (no `allow`) |
 
 ## 6.5 Rule schema (flat)
 
@@ -103,12 +112,11 @@ Full condition set (v1, closed — new conditions need a schema+spec bump):
 | Condition | Type | Matches when |
 |---|---|---|
 | `argv` | array (string or `{anyOf}`) | contiguous token sequence from the part's token list |
-| `argvAt` | array of `{ "at": int, "one": string or {anyOf} }` | the token at each given 0-based position matches (order of entries irrelevant) |
+| `argValue` | array of globs (strings) | **∃ positional token × ∃ glob** — the positional mirror of `flagValue`: matches when any token of the stage tail matches any listed glob (OR over globs, exists over positions; the token is the decoded text — no canonical interpretation in v1, ADR-0016 N6) |
 | `pattern` | string glob | the **raw** command string matches (07 §7.5) |
 | `classification` | `"static"` \| `"opaque"` | the part's classification equals (07 §7.3) |
 | `flag` | map flag → `"present"` \| `"absent"` | every entry holds for the parsed flag set |
-| `flagValue` | map flag → glob | the flag's value (inline `--flag=v` or the following token per arity) matches the glob |
-| `paths` | `{ "within": [globs], "notWithin"?: [globs] }` — against `paths` arguments of the command, resolved per 07 §7.4 | every referenced path resolves inside/outside all globs (`$project` token expands to the letter's `invocation.projectDir`) |
+| `flagValue` | map flag → glob | **anyOf across the map** (aliases of one conceptual flag, e.g. `-v` / `--volume`): the entry holds when ANY named flag's value — inline `--flag=v` or the following token per arity — matches the glob. A flag declared in the map must be present in the stage table; absence of the flag ⇒ the entry does not match |
 
 Multiple conditions on one rule AND together. A rule with zero conditions
 matches everything. Unknown conditions, unknown fields ⇒ invalid config
@@ -149,10 +157,10 @@ matches everything. Unknown conditions, unknown fields ⇒ invalid config
       ] },
     { "id": "docker",
       "scope":  { "anyOf": [ { "argv": ["docker"] }, { "pattern": "docker *" } ] },
-      "flags":  { "-v": 1, "-d": 0 },
+      "flags":  { "-v": 1, "--volume": 1, "-d": 0 },
       "rules": [
         { "id": "docker/no-root-mount",
-          "argv": ["run"], "flagValue": { "-v": ":/:*" },
+          "argv": ["run"], "flagValue": { "-v": "/:*", "--volume": "/:*" },
           "action": "deny", "message": "do not mount / into the container" }
       ] },
     { "id": "catch-all",

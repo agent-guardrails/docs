@@ -29,13 +29,21 @@ early once a deny is known.
 ## 8.2 Stage entry and rule vote
 
 1. **Scope entry**: a stage matches a part when ANY `scope.anyOf` condition
-   holds (argv token sequence or raw glob, 06 §6.3). All stages are consulted —
-   stages do not claim or exclude each other (the old `exclusive` is retired
-   with the tool walk).
+   holds (argv token sequence or raw glob, 06 §6.3). The matched `argv`
+   condition **anchors** the stage: its consumed prefix length (in the
+   stage-cleaned argv, 06 §6.4) defines the tail the stage's rules match
+   against. All stages are consulted — stages do not claim or exclude each
+   other (the old `exclusive` is retired with the tool walk).
 2. **Vote**: a rule votes when ALL its conditions hold for the part (conditions
-   AND). `allow`-rules vote only when the part is `static` (I10); on `opaque`
-   parts they are treated as non-matching and evaluation continues.
-3. **Short-circuit**: once a `deny` vote exists for a part, further rule
+   AND), evaluated on the stage anchor's tail (06 §6.4), the stage's flag
+   facts, the part's raw text and the decoded token text (`argv`/`argValue`)
+   — no path semantics in v1 (ADR-0016 N6). `allow`-rules vote only when the
+   part is `static` (I10); on `opaque` parts they are treated as non-matching
+   and evaluation continues.
+3. **Unknown flags**: a flag base absent from the stage `flags` table keeps
+   the part from being fully parsed for this stage — `allow` rules do not vote
+   (I10 posture); `deny`/`ask` still vote.
+4. **Short-circuit**: once a `deny` vote exists for a part, further rule
    matching inside that part may stop — a deny cannot be out-ranked (§8.4).
 
 ## 8.3 Refinement (precise over broad)
@@ -48,7 +56,9 @@ same part:
   S equals S′'s or S is longer along the same prefix (level-prefix of tokens),
   including `{anyOf}` membership;
 - flag predicates: the refiner's `flag`/`flagValue` requirements contain the
-  refined's (strictly more constrained refinement code basis: bash-guard).
+  refined's (strictly more constrained refinement code basis: bash-guard);
+- value predicates: `argValue` glob lists are entrywise contained
+  (refiner's list ⊇ refined's list).
 
 Refined rules are discarded before reduction, so a narrow `allow` survives the
 broad `allow` it refines and the most-restrictive reduction applies to genuinely
