@@ -1,6 +1,6 @@
 # 0016 — Two-tier enforcement: thin harness hook + one-shot decision binary
 
-* **Status:** Proposed (2026-11-01)
+* **Status:** Accepted (2026-11-03; supersedes 0002/0005/0007/0008)
 * **Deciders:** preved911
 * **Related:** supersedes [0002](0002-stdio-ndjson-rpc-over-mcp.md), [0005](0005-single-evaluate-hook-stages-in-engine.md), [0007](0007-one-evaluation-component.md), [0008](0008-orchestrator-core-logic-in-tools.md); carries 0003, 0009, 0010, 0012, 0013, 0014, 0015 (semantics carried over — see Supersession)
 
