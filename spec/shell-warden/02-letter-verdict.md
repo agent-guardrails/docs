@@ -1,6 +1,11 @@
 # 02 — Letter & Verdict (one-shot contract)
 
-Version 2.0 · 2026-11-01 · Schemas: `../../schemas/shell-warden.letter.v1.schema.json`,
+Version 2.1 · 2026-11-04 · Revised for checker configuration v2 (command profiles) per
+[docs#15](https://github.com/agent-guardrails/docs/issues/15): the letter envelope and the
+verdict shapes are UNCHANGED — both schemas stay as they are byte-wise; the revision
+documents only how v2 evidence states map into the unchanged wire values.
+
+Schemas: `../../schemas/shell-warden.letter.v1.schema.json`,
 `../../schemas/shell-warden.verdict.v1.schema.json`
 
 Revised per [ADR-0016](../../adr/0016-two-tier-enforcement.md): the persistent NDJSON wire protocol
@@ -75,17 +80,21 @@ the checker NEVER trusts this split (`07-command-parsing.md` §7.2); it re-split
 |---|---|---|
 | `invocationId` | yes | echo of `invocation.id` |
 | `verdict` | yes | aggregate ∈ `allow / ask / deny`; **authoritative**; hook applies tighten-only |
-| `message` | yes on tighten | ≤ 512 chars; copied to the rejection reply / shown in native prompt (I11: rule `message` templates only) |
+| `message` | yes on tighten | ≤ 512 chars; copied to the rejection reply / shown in native prompt (I11: rule `message` templates only); an aggregate deny with no rule message falls back to the constant `denied by shell-warden policy` (08 §8.6) |
 | `commands[]` | yes | exactly one entry per request `commands[]`; `index` MUST match |
 | `commands[].verdict` | yes | per-command aggregate verdict |
-| `commands[].ruleId` | deny/ask | id of the deciding rule (first deny wins; best ask otherwise) — audit string |
-| `commands[].classification` | yes | `static / opaque` (07 §7.3) |
-| `commands[].match` | yes | what the rule matched: `argv` (fully parsed) or `raw` (raw glob — never on an `allow`) |
-| `commands[].facts` | no | parsed-evidence diagnostics; ≤ 16 KiB serialized, depth ≤ 8 (I6) |
+| `commands[].ruleId` | yes on ask/deny | id of the part-level deciding rule — the lexicographically smallest rule id among that command's deciding verdict at the winning action (08 §8.6, §8.3); audit string |
+| `commands[].classification` | yes | `static / opaque` at this wire boundary. The checker's v2 evidence states are `complete / opaque / invalid` (07 §7.3): `complete` maps to `static`, and BOTH `opaque` AND `invalid` map to `opaque` — `invalid` blocks allow exactly like `opaque` and denies still match — with the true state and stable reason codes carried in `facts`. The coordinated hook change
+that lifts `invalid` to its own classification value is tracked in
+[opencode-shell-warden-hook](https://github.com/agent-guardrails/opencode-shell-warden-hook);
+until that lands, this mapping is normative |
+| `commands[].match` | yes | what the deciding rule matched: `argv` when the command's evidence is `complete` (the only kind an allow may carry), `raw` otherwise (07 §7.3, 08 §8.6) |
+| `commands[].facts` | no | checker diagnostics, bounded after the decision by `limits.diagnosticsBytes` (06 §6.2). The v2 diagnostics object is `{ evidence, reasons, selectedProfiles, matched, qualified, rejected, votes }` (08 §8.7); when it exceeds the bound it reduces to `{ evidence, reasons, diagnostics: "truncated-after-decision" }`. ≤ 16 KiB serialized under the hook cap, depth ≤ 8 (I6) |
 
 Verdict bounds: output ≤ 64 KiB; anything larger is a checker defect. `deny` MUST always carry a
-`message` (prescriptive, 07 §7.6); `allow` carries `message` only if it will not tighten anything
-(the hook ignores it).
+`message` (prescriptive, 07 §7.7); `allow` carries `message` only if it will not tighten anything
+(the hook ignores it). The v1 verdict schema stays UNCHANGED byte-wise: its `facts` field is
+already a free-form object, so it carries the v2 diagnostics of §2.3 without any schema edit.
 
 ## 2.4 Exit codes
 
@@ -102,7 +111,7 @@ degrade. In every row of 09 §9.4 the result is `onCheckerError ∈ {ask, deny}`
 
 ## 2.5 Config lifecycle (one-shot posture)
 
-The checker re-reads its rules file **on every spawn** — there is no reload channel, no handshake,
+The checker re-reads its profiles file **on every spawn** — there is no reload channel, no handshake,
 no version pinning beyond the config `version` (06 §6.1). Invalid config ⇒ exit 2 (I3, never
 fail-open). Consequence: a cached hook verdict can outlive a config change by at most the cache TTL
 (03 §3.4); uncached verdicts always see the current file.
@@ -118,7 +127,7 @@ hook → permission.reply(decision:"reject", message) / "once" / silence
 
 ```
 hook → spawn checker (config invalid)
-chk → (stderr: config invalid: stages[0].rules[1].flagValue.-v must be a string)
+chk → (stderr: config invalid: defaults.redirectPolicy references unknown policy "safe-local-iox")
 chk → exit 2, no stdout
 hook → onCheckerError (default "ask"): no reply → human sees the prompt
 ```

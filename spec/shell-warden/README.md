@@ -18,14 +18,14 @@ state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
 | `03-shim.md` | plugin | reply automation, invoker, per-session state |
 | `04-shim-config.md` | plugin config | `opencode.jsonc` plugin options schema |
 | `05-engine-runtime.md` | — | **retired** (persistent engine); pointers only |
-| `06-engine-config.md` | rules grammar | **flat stages/rules grammar of the checker (v1)** |
-| `07-command-parsing.md` | parsing | **normative**: normalization, chain split, classification, vocabulary |
-| `08-request-processing.md` | decision pipeline | **match, refine, reduce; first deny final; hook duties** |
+| `06-engine-config.md` | rules grammar | **command profiles, typed-evidence rules grammar of the checker (config v2)** |
+| `07-command-parsing.md` | parsing | **normative**: recursive parts and evidence states, quote classes, redirects, matching vocabulary |
+| `08-request-processing.md` | decision pipeline | **action-sensitive matching, fixed-lattice reduction, monotonicity; hook duties** |
 | `09-security.md` | security | invariants, threat model, fail-closed matrix |
-| `10-testing.md` | quality | golden (checker), contract (hook), integration; live-smoke history |
+| `10-testing.md` | quality | unit/scenario/property suites, golden (checker CLI), contract (hook), integration; live-smoke history |
 | `11-roadmap.md` | delivery | milestones, open questions |
 | `../../design/shell-legible-gate.md` | design | readability gate, standalone binary (ADR-0007 superseded 0007: separate project) |
-| `../../schemas/*.json` | machine | JSON Schema drafts: letter v1, verdict v1, checker config v1 |
+| `../../schemas/*.json` | machine | JSON Schema drafts: letter v1, verdict v1, checker config v1 (superseded reference) and config v2 |
 
 ## Reading order
 
@@ -43,4 +43,6 @@ state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
   `shell-warden` repository. **Letter / verdict** = the request/response JSON of 02.
 - All durations are integer milliseconds. All budget clamps are enforced with warn+clamp, never silently.
 - Spec changes: bump the doc version and the relevant `version` field of the matching schema.
-- Revision status: all of 01–04, 06–11 revised to v2.0 (ADR-0016); 05 retired.
+- Revision status: 02 and 06–10 revised to v2.1 (command profiles, config v2 per
+  [docs#15](https://github.com/agent-guardrails/docs/issues/15)); 01, 03, 04, 11 remain at
+  v2.0 (ADR-0016); 05 retired.
