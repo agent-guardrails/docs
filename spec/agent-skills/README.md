@@ -1,12 +1,12 @@
-# opencode-skills: Specification Set
+# agent-skills: Specification Set
 
 Status: initial skeleton. Repository design is in
-[`design/opencode-skills-repository.md`](../../design/opencode-skills-repository.md),
+[`design/agent-skills-repository.md`](../../design/agent-skills-repository.md),
 with the repository choice recorded in
-[ADR-0017](../../adr/0017-public-opencode-skills-repository.md).
+[ADR-0017](../../adr/0017-public-agent-skills-repository.md).
 
-`opencode-skills` is planned as a public pack of standalone OpenCode
-v2-compatible skills in `agent-guardrails/opencode-skills`.
+`agent-skills` is planned as a public pack of portable Agent Skills in
+`agent-guardrails/agent-skills`.
 
 ## Planned scope
 
