@@ -76,8 +76,8 @@ recursive profile option parsing, analyzer facts, and analyzer-command parts
 complete recursive part and evidence graph
       |
       v
-global ask/deny guards -> policy resolution -> local predicate satisfaction
-      -> allow coverage validation -> emitted votes
+policy resolution -> local predicate satisfaction -> allow coverage validation
+      -> emitted votes
      |
      v
 deny > ask > allow across every part
@@ -161,13 +161,13 @@ Path coordinates are closed:
 - `analyzerFact(analyzerId, version, factName, factOccurrence)`
 
 For supported literal-path redirects, the parser always emits the corresponding
-`redirect(...)` path coordinate before profile selection. Global rules can inspect
-that evidence and redirect structure without depending on `pathSources`. All
-other path evidence appears only from profile `pathSources` declarations or the
-selected analyzer's fact catalog. Rules cannot cause new evidence to be produced.
-A profile with no path source declaration does not gain non-redirect path
-evidence merely because an argument resembles a path. This keeps allow coverage
-obligations independent of which rules happen to match.
+`redirect(...)` path coordinate before profile selection. Redirect policies cover
+that evidence without depending on `pathSources`. All other path evidence appears
+only from profile `pathSources` declarations or the selected analyzer's fact
+catalog. Rules cannot cause new evidence to be produced. A profile with no path
+source declaration does not gain non-redirect path evidence merely because an
+argument resembles a path. This keeps allow coverage obligations independent of
+which rules happen to match.
 
 Evidence production performs no I/O and no PATH lookup.
 
@@ -244,7 +244,7 @@ does not qualify an allow.
 | Dimension | Required allow `match` form | Coverage rule |
 |---|---|---|
 | `arguments` | `exact: token[]`, or `prefix: token[]` plus `remainder: { "none": true } | { "each": tokenSelector }` | `exact` covers the whole positional list. `prefix` covers its prefix and applies the explicit remainder policy to every remaining positional argument. |
-| `options` | `{ "none": true }` or `{ "all": [optionPolicy, ...] }` | Every option occurrence and every consumed or inline value satisfies one entry. Repeated options are never collapsed. Each entry selects canonical ID, occurrence and value selectors, plus `count: { min, max? }`; universal coverage and observed count are separate. |
+| `options` | `{ "none": true }` or `{ "allowed": [optionPolicy, ...] }` | Every option occurrence and every consumed or inline value satisfies one entry. Repeated options are never collapsed. Each entry references one canonical profile option and states `required` and `repeatable`; universal coverage and presence or repetition are separate. |
 | `environment` | `{ "none": true }` or `{ "all": [environmentPolicy, ...] }` | Every assignment occurrence satisfies name, literal-value, prefix-position, and occurrence selectors. |
 | redirects and redirect-target paths | Mandatory resolved effective `redirectPolicy` | Every redirect occurrence satisfies source FD, including the explicit `default` selector, operator, occurrence, and target kind; every emitted redirect path coordinate satisfies its lexical policy. Literal-path and FD-duplication targets are separate closed target kinds. |
 | `paths` | `{ "none": true }` or `{ "all": [pathPolicy, ...] }` | Every emitted non-redirect exact coordinate satisfies an `exact`, `within`, or `outside` lexical policy. Redirect coordinates never appear in this allow matcher. |
@@ -253,11 +253,15 @@ does not qualify an allow.
 
 `prefix` without `remainder` is invalid. `remainder.each` applies only to
 positional arguments, never to option tokens or option values. An exact allow is
-the usual form for a command with a fixed positional shape. An option policy's
-universal coverage checks every observed occurrence and value, while its `count`
-checks the observed count for that canonical option against `min` and `max`.
-`min: 1` makes a required option non-vacuous; omitted `max` is bounded only by
-global resource caps. An option not named by any allow policy fails coverage.
+the usual form for a command with a fixed positional shape. Every observed option
+must match one `allowed` entry by canonical `option` reference. `required: true`
+means at least one occurrence exists; `required: false` makes it optional.
+`repeatable: false` permits at most one occurrence, while `repeatable: true`
+permits multiple occurrences within resource limits. Together, `required: true`
+and `repeatable: false` mean exactly one. A positive-arity entry also covers each
+consumed value with a closed value selector. Unknown or unlisted options prevent
+allow, and aliases that normalize to the same canonical option are repeated
+occurrences.
 
 The implementation owns a versioned, closed redirect catalog. V2 supports input
 `<`, truncate output `>`, append output `>>`, and FD duplication `>&` and `<&`.
@@ -267,7 +271,7 @@ opaque evidence and fail closed for allow. Heredocs and here-strings are invalid
 until a later design adds typed support; this draft does not treat them as
 redirects that can be allowed.
 
-## Reusable redirect policies and global guards
+## Reusable redirect policies
 
 `redirectPolicies` is a top-level map of named, flat redirect policy bundles.
 Each bundle is closed and contains redirect structure entries and the matching
@@ -309,19 +313,14 @@ coordinates. An inline `RedirectPolicy` appears only inside a rule
 `match.paths` for allow. The expanded effective policy is part of the allow
 coverage proof; an uncovered redirect means the allow emits no vote and the
 result is at least ask unless another vote wins. Unsupported or dynamic redirect
-forms remain invalid or opaque and cannot allow. Ask, deny, and global ordinary
-matchers may inspect `match.redirects` and any exact path coordinate, including a
-redirect coordinate.
+forms remain invalid or opaque and cannot allow. Ask and deny ordinary matchers
+may inspect `match.redirects` and any exact path coordinate, including a redirect
+coordinate.
 
-`globalRules` is a top-level closed list limited to `ask` and `deny`; global
-allow is invalid. The checker first builds the complete recursive part and
-evidence graph, including profile option parsing, analyzer facts, and every
-analyzer-created `analyzer-command` part with its own parser and profile evidence.
-Global rules then evaluate every final part before vote reduction and join the
-same `deny > ask > allow` lattice. A global redirect path guard uses
-parser-produced redirect target evidence, not profile-local `pathSources`.
-Profile or allow-rule `replace` changes only permissive redirect coverage and
-never suppresses a global ask or deny vote.
+Redirect-wide policy is an overridable default, not a deny vote. A true local
+deny still follows `deny > ask > allow` and cannot be overridden. When a profile
+or command needs different redirect coverage, it uses policy inheritance,
+extension, or replacement rather than a global-deny/local-allow conflict.
 
 ## Lattice reduction and fallback hints
 
@@ -358,7 +357,7 @@ external lookup and remain outside the checker.
 ## Illustrative JSONC configuration
 
 This compact configuration shows exact positional shape, complete allow
-coverage, inherited and extended redirect coverage, global deny overlap, and a
+coverage, inherited and extended redirect coverage, and a
 replacement with no redirects. `node-version` has one executable grammar. Other
 tools that need version checks, including npm, pnpm, bun, cargo, go, and
 terraform, use separate profiles unless their aliases are genuinely
@@ -382,17 +381,6 @@ grammar-equivalent.
       "paths": { "none": true }
     }
   },
-  "globalRules": [
-    {
-      "id": "global/deny-sensitive-redirect",
-      "action": "deny",
-      "message": "Redirecting into /etc is not permitted.",
-      "match": {
-        "redirects": { "containsAny": [{ "target": { "kind": "literalPath" } }] },
-        "paths": { "containsAny": [{ "coordinate": { "redirect": "all" }, "within": "/etc" }] }
-      }
-    }
-  ],
   "profiles": [
     {
       "id": "git",
@@ -433,7 +421,7 @@ grammar-equivalent.
             "mode": "extend",
             "inline": {
               "redirects": { "all": [{ "sourceFd": "default", "operator": ">>", "occurrence": "all", "target": { "kind": "literalPath" } }] },
-              "paths": { "all": [{ "coordinate": { "redirect": { "operator": ">>", "sourceFd": "default", "occurrence": "all" } }, "within": "/tmp/reports" }] }
+              "paths": { "all": [{ "coordinate": { "redirect": { "operator": ">>", "sourceFd": "default", "occurrence": "all" } }, "within": "/var/tmp/git-reports" }] }
             }
           },
           "match": {
@@ -453,7 +441,7 @@ grammar-equivalent.
           "match": {
             "classification": "complete",
             "arguments": { "exact": ["log"] },
-            "options": { "all": [{ "id": "oneline", "occurrence": "all", "count": { "min": 1, "max": 1 } }] },
+            "options": { "allowed": [{ "option": "oneline", "required": true, "repeatable": false }] },
             "environment": { "none": true },
             "paths": { "none": true },
             "facts": { "none": true },
@@ -467,27 +455,7 @@ grammar-equivalent.
           "match": {
             "classification": "complete",
             "arguments": { "exact": ["push", "origin", "main"] },
-            "options": { "all": [{ "id": "dryRun", "occurrence": "all", "count": { "min": 1, "max": 1 } }] },
-            "environment": { "none": true },
-            "paths": { "none": true },
-            "facts": { "none": true },
-            "nestedParts": { "none": true }
-          }
-        },
-        {
-          "id": "git/allow-status-sensitive-extension",
-          "action": "allow",
-          "redirectPolicy": {
-            "mode": "extend",
-            "inline": {
-              "redirects": { "all": [{ "sourceFd": "default", "operator": ">", "occurrence": "all", "target": { "kind": "literalPath" } }] },
-              "paths": { "all": [{ "coordinate": { "redirect": { "operator": ">", "sourceFd": "default", "occurrence": "all" } }, "within": "/etc" }] }
-            }
-          },
-          "match": {
-            "classification": "complete",
-            "arguments": { "exact": ["status"] },
-            "options": { "none": true },
+            "options": { "allowed": [{ "option": "dryRun", "required": true, "repeatable": false }] },
             "environment": { "none": true },
             "paths": { "none": true },
             "facts": { "none": true },
@@ -500,16 +468,16 @@ grammar-equivalent.
       "id": "node-version",
       "executables": ["node"],
       "options": { "version": { "aliases": ["--version", "-V"], "arity": 0 } },
+      "redirectPolicy": { "mode": "replace", "policies": ["no-redirects"] },
       "analyzer": "generic-v1",
       "rules": [
         {
           "id": "node-version/allow-bare-version",
           "action": "allow",
-          "redirectPolicy": { "mode": "replace", "policies": ["no-redirects"] },
           "match": {
             "classification": "complete",
             "arguments": { "exact": [] },
-            "options": { "all": [{ "id": "version", "occurrence": "all", "count": { "min": 1, "max": 1 } }] },
+            "options": { "allowed": [{ "option": "version", "required": true, "repeatable": false }] },
             "environment": { "none": true },
             "paths": { "none": true },
             "facts": { "none": true },
@@ -524,28 +492,28 @@ grammar-equivalent.
 
 `git/allow-status` inherits `safe-local-io` without repeating its redirect and
 path selectors. `git/allow-status-append-report` extends that effective policy
-with `>>` under the same lexical root. The log and dry-run rules replace it with
-`no-redirects`. `git/allow-status-sensitive-extension` demonstrates that an
-extension can be coverage-qualified while the global deny still wins. `npm
-install --version` has no selected profile in this compact example and asks; it
-cannot inherit Node's option grammar.
+with `>>` under `/var/tmp/git-reports`. The log and dry-run rules replace it with
+`no-redirects`. The `node-version` profile deliberately replaces the default with
+`no-redirects` without changing the Git profile. `npm install --version` has no
+selected profile in this compact example and asks; it cannot inherit Node's
+option grammar.
 
 ## Evaluation scenarios
 
 | Input or assumption | Result | Reason |
 |---|---|---|
-| `git push --force --dry-run origin main` | deny | The dry-run allow fails coverage for `force`; the force-push deny emits. |
+| `git push --force --dry-run origin main` | deny | `force` is not allowed by the dry-run policy and the force-push deny emits. |
 | `git log --oneline` plus an explicit matching ask | ask | Ask dominates allow. |
-| `git log` | ask | The `oneline` policy has `count.min: 1`, so the absent option cannot qualify the allow. |
-| `git push origin main` | ask | The `dryRun` policy has `count.min: 1`, so the absent option cannot qualify the allow. |
-| `node` | ask | The `version` policy has `count.min: 1`, so the absent option cannot qualify the allow. |
+| `git log` | ask | The `oneline` entry is required, so its absence cannot qualify the allow. |
+| `git push origin main` | ask | The `dryRun` entry is required, so its absence cannot qualify the allow. |
+| `node` | ask | The `version` entry is required, so its absence cannot qualify the allow. |
+| `git log --oneline --oneline` | ask | `oneline` is not repeatable, so the second occurrence prevents allow. |
 | `git status --unknown-option` | ask | Unknown option makes evidence invalid; allow emits no vote. |
 | `git log "$BRANCH"` | ask | Active double-quoted expansion is opaque. |
 | `git status > /tmp/reports/status.txt` | allow | The status rule inherits `safe-local-io`; its effective policy covers the redirect and parser-produced target coordinate. |
 | `git status > /tmp/other/status.txt` | ask | The redirect is outside the effective policy's lexical root, so allow emits no vote. |
-| `git status >> /tmp/reports/status.txt` | allow | The append-report rule extends the default set with the `>>` entry. |
+| `git status >> /var/tmp/git-reports/status.txt` | allow | The append-report rule extends the default set with the `>>` entry for its additional root. |
 | `git log --oneline > /tmp/reports/log.txt` | ask | The log rule replaces permissive coverage with `no-redirects`. |
-| `git status > /etc/status.txt` | deny | The sensitive extension can cover the redirect, but the global redirect deny emits and dominates. |
 | `git status 2>&1` | ask | FD duplication is a distinct redirect target kind and is not selected. |
 | `git status > "$REPORT"` | ask | The dynamic redirect target is opaque and cannot allow. |
 | `GIT_DIR=/tmp/repo git status` | ask | The status allows require `environment: { "none": true }`. |
@@ -567,14 +535,12 @@ Property tests cover the following invariants:
   profiles, or rules does not change a verdict or resolved canonical policy set.
 - `extend` resolves to set union of inherited, named, and inline canonical
   entries; duplicates do not change the set.
-- Option coverage rejects every occurrence or consumed value outside its policy,
-  while `count.min` and `count.max` independently reject absent or overabundant
-  selected options. `min: 1` is non-vacuous and omitted `max` remains bounded by
-  global resource caps.
+- Option coverage rejects every occurrence or consumed value outside its policy.
+  `required` independently rejects absence, `repeatable` independently rejects
+  a second occurrence, and duplicate aliases normalize to repeated canonical
+  occurrences.
 - `replace` changes permissive redirect coverage only. It does not alter another
-  allow dimension or remove a global ask or deny vote.
-- A global deny remains dominant over every inherited, extended, or replaced
-  redirect policy.
+  allow dimension. Local deny votes remain dominant under the fixed lattice.
 - Unknown policy references, malformed entries, and any attempted policy cycle
   are invalid. Named policies are flat, so a cycle can only arise from an
   unsupported reference shape and is rejected.
@@ -591,24 +557,17 @@ config
   defaults: { action: "ask", message?, redirectPolicy: policyId }
   limits?: { configBytes?, profiles?, rules?, evidenceItems?, diagnosticsBytes? }
   redirectPolicies: { policyId: closed RedirectPolicy }
-  globalRules?: globalRule[]             // ask | deny only
   profiles: profile[]
-
-globalRule
-  id
-  action: "ask" | "deny"
-  message?: string
-  match: closed ordinary Match
 
 RedirectPolicy
   redirects: closed redirect coverage form
   paths: closed redirect-target path coverage form
 
 optionPolicy
-  id: canonicalOptionId
-  occurrence: occurrence selector
+  option: canonicalOptionId
+  required: boolean
+  repeatable: boolean
   values?: each(valueSelector)           // positive arity only
-  count: { min: nonnegativeInteger, max?: nonnegativeInteger }
 
 redirectPolicy override
   mode: "inherit" | "extend" | "replace"
@@ -664,26 +623,24 @@ Semantic validation includes:
   `match.paths` are invalid for allow.
 - An allow prefix has explicit `remainder`; exact has no remainder. Allow option
   entries cover every occurrence and every consumed or inline value rather than a
-  first or last occurrence. Each option entry has a `count` selector separate
-  from universal coverage; the observed canonical-option count satisfies `min`
-  and optional `max`, with `min <= max` when both exist. `min: 1` makes an option
-  required, and omitted `max` is bounded only by global resource caps. Environment
-  entries select name, literal value, prefix position, and occurrence. Redirect
+  first or last occurrence. Each option entry references a declared canonical
+  profile option. `required` checks whether at least one occurrence exists and
+  `repeatable` checks whether more than one occurrence is permitted. Positive-
+  arity entries also select every consumed value. Environment entries select name,
+  literal value, prefix position, and occurrence. Redirect
   policy entries select source FD, operator, occurrence, and target kind,
   including literal paths and FD duplication.
 - Non-redirect paths use exact closed coordinates and lexical policy, and every
   coordinate originates from a valid profile-scoped `pathSources` declaration or
   analyzer catalog entry. Supported literal redirect target paths are always
-  parser-produced and are available to global rules and redirect policies. Facts
+  parser-produced and are available to redirect policies. Facts
   and nested parts use explicit `none` or `all`
   coverage policies. Nested entries include relation, occurrence or quantifier,
   profile, evidence state, and verdict.
-- Global rules contain only ask or deny actions and may use redirect structure
-  and parser-produced redirect path evidence. They run only after the complete
-  recursive part and evidence graph, including analyzer-created parts, exists.
-  Resolution applies config default, profile override, then allow-rule override;
+- Resolution applies config default, profile override, then allow-rule override;
   `extend` is set union and `replace` changes only permissive redirect coverage.
-  Global votes remain outside that replacement and join the lattice unchanged.
+  Redirect policies never emit votes. Local deny, ask, and allow votes reduce by
+  the fixed lattice.
 - Analyzer compatibility and safety metadata come only from implementation-owned
   versioned tables. Trusted roots are absolute normalized lexical paths.
 - Limits bound config bytes, profiles, rules, nesting, alternatives, evidence,
@@ -699,13 +656,13 @@ The checker computes full evidence and all decisions before applying diagnostic
 bounds. Per part, diagnostics record sorted and bounded matched-rule IDs,
 matched allow IDs, coverage-qualified allow IDs, rejected allow IDs with stable
 coverage reason codes, emitted votes, selected profile, evidence state, resolved
-redirect policy IDs and canonical entries, global-rule IDs and votes, and
-parser/option reasons.
+redirect policy IDs and canonical entries, and parser/option reasons.
 Examples of stable reasons are `opaque-expansion`, `unknown-option`,
 `option-value-missing`, `evidence-limit`, `allow-evidence-not-complete`, and
 `allow-coverage-missing`. Option diagnostics additionally use
-`option-count-out-of-range`. Redirect-policy diagnostics additionally use stable
-reasons such as `redirect-policy-uncovered` and
+`required-option-missing`, `option-not-repeatable`, and `option-not-allowed`.
+Redirect-policy diagnostics additionally use stable reasons such as
+`redirect-policy-uncovered` and
 `redirect-policy-reference-unknown`.
 
 The current verdict contract in spec 02 and the v1 verdict schema cannot encode
@@ -721,8 +678,7 @@ the `invalid` evidence state without weakening the hook's closed validation.
 V1 syntax is not accepted by v2. Backward compatibility, automatic translation,
 and compatibility shims are out of scope. A user-config migration guide and
 tooling ticket can map intended policies into profiles, named redirect policies,
-global redirect guards, and coverage-aware allow matchers, but a v2 checker reads
-v2 only.
+and coverage-aware allow matchers, but a v2 checker reads v2 only.
 
 The v1 stage model, unrelated shared executable grammars, implicit refinement,
 priorities, order semantics, and raw-based allow are retired. Existing raw deny
@@ -734,8 +690,8 @@ evidence and universal coverage.
 After design acceptance:
 
 1. Update specs 02, 06, 07, 08, 09, and 10 together with the v2 config schema
-   and verdict schema. This synchronizes parsing, global redirect evidence,
-   named policy resolution, global guards, diagnostics, trust invariants,
+   and verdict schema. This synchronizes parsing, redirect evidence, named
+   policy resolution, diagnostics, trust invariants,
    property tests, and wire validation.
 2. Create one implementation ticket and one user-config migration ticket.
 3. Keep the hook policy mapping and request-letter envelope unchanged while the
