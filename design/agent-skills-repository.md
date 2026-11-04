@@ -1,14 +1,14 @@
-# Design: public `opencode-skills` repository
+# Design: public `agent-skills` repository
 
 v0.1 · 2026-11-04 · Status: ready for implementation
 
-Implementation: [`agent-guardrails/opencode-skills`](https://github.com/agent-guardrails/opencode-skills), public from its first commit. Parent implementation work: [agent-guardrails/.github issue 23](https://github.com/agent-guardrails/.github/issues/23). Documentation work: [agent-guardrails/docs issue 18](https://github.com/agent-guardrails/docs/issues/18). Architectural decision: [ADR-0017](../adr/0017-public-opencode-skills-repository.md).
+Implementation: [`agent-guardrails/agent-skills`](https://github.com/agent-guardrails/agent-skills), public from its first commit. Parent implementation work: [agent-guardrails/.github issue 23](https://github.com/agent-guardrails/.github/issues/23). Documentation work: [agent-guardrails/docs issue 18](https://github.com/agent-guardrails/docs/issues/18). Architectural decision: [ADR-0017](../adr/0017-public-agent-skills-repository.md).
 
 ## 1. Purpose and boundaries
 
-`opencode-skills` is a repository-managed pack of standalone skills compatible
-with OpenCode v2. It provides a reviewable, versioned home for organization
-skills without making a local OpenCode configuration file the source of truth.
+`agent-skills` is a repository-managed pack of portable Agent Skills. It
+provides a reviewable, versioned home for organization skills without making
+one harness configuration the source of truth.
 
 The repository is public and distributes the pack free of charge for
 non-commercial use. Every copied or adapted skill ships with its applicable
@@ -17,7 +17,8 @@ statement.
 
 This repository does not provide an agent runtime, a browser workflow, UI or
 visual QA, frontend guidance, or data-processing guidance. Skills run through
-OpenCode's normal skill mechanism and stay usable without an OMO runtime.
+each supported harness's normal skill mechanism and stay usable without an OMO
+runtime or OpenCode-specific contract.
 
 ## 2. Repository shape and installation
 
@@ -35,8 +36,10 @@ One repository owns the pack. Skills remain independently selectable by name;
 separate repositories are reserved for a future case with distinct ownership,
 licensing, or release cadence.
 
-Each `SKILL.md` contains its own metadata and instructions. Shared material is
-kept only where it prevents duplicated, conflicting guidance.
+Each skill directory is self-contained. It includes `SKILL.md`, the applicable
+license terms, provenance, and a prominent modification notice when adapted.
+Harness-specific examples may live under `references/harnesses/`; the core
+workflow does not require those adapters.
 
 Installation and updates are designed around the `npx skills` workflow. The
 repository documents the conceptual install and update path for organization
@@ -64,7 +67,7 @@ or adapted content.
 
 ### `debugging`
 
-The initial adapted public OMO skill is `debugging`. It teaches a
+The initial adapted public OMO skill is `debugging`. Its portable core teaches a
 hypothesis-driven workflow:
 
 1. State several plausible causes before changing code.
@@ -73,21 +76,23 @@ hypothesis-driven workflow:
 4. Add or update a regression check when the project has a suitable test path.
 5. Verify the behavior through the relevant CLI, API, test, or build surface.
 
-The skill may suggest targeted research or review delegation when evidence is
-insufficient or the problem crosses a specialist boundary. Such delegation is
-optional, and the workflow remains usable with native OpenCode agents alone.
+The skill may suggest targeted external research or independent review when
+evidence is insufficient or the problem crosses a specialist boundary. Such
+delegation is optional and described by role rather than a harness-specific
+agent name.
 
 ### `review-work`
 
-The initial adapted public OMO skill is `review-work`. It orchestrates a native
-code review using evidence from the repository's CLI, API, tests, and build.
+The initial adapted public OMO skill is `review-work`. It orchestrates an
+independent code review using evidence from the repository's CLI, API, tests,
+and build.
 Its scope is implementation correctness, security-relevant behavior, regressions,
 and evidence gaps. It explicitly excludes UI and visual QA.
 
-`research` and `review` are the native agents used for the broad evidence and
-review passes. OpenCode's built-in `explore` agent remains reserved for local
-codebase search. The skill does not require team mode or any named external
-runtime.
+The workflow names external-research and independent-review roles, not concrete
+agents. Harness adapters may map those roles to available subagents; the skill
+remains useful when a harness has only one agent. It does not require team mode
+or any named runtime.
 
 ## 5. Validation and release flow
 
@@ -97,7 +102,7 @@ and SUL-1.0 notices where applicable, and consistency with its stated scope.
 The maintainers also exercise the skill through OpenCode's normal loading path
 and run any repository checks available for the pack.
 
-The release flow is: author change, review in `opencode-skills`, validate the
+The release flow is: author change, review in `agent-skills`, validate the
 pack, publish a versioned release, then update consumers through the documented
 `npx skills` path. Documentation and notices travel with the release.
 
