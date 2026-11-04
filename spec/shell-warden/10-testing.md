@@ -1,17 +1,20 @@
 # 10 — Testing Strategy
 
-Version 2.0 · 2026-11-01 · Re-targeted per [ADR-0016](../../adr/0016-two-tier-enforcement.md):
-golden coverage of the checker (letter → verdict) without a harness; hook
-contract against a scripted mock binary.
+Version 2.1 · 2026-11-04 · Revised for checker configuration v2 (command profiles) per
+[docs#15](https://github.com/agent-guardrails/docs/issues/15): golden coverage of the checker
+(letter → verdict), profile-driven scenario and property tests, and the hook contract against
+a scripted mock binary.
 
 ## 10.1 Suites
 
 | Suite | What | Where | Needs OpenCode |
 |---|---|---|---|
-| Golden (checker) | `shell-warden` CLI: letter JSON in → verdict JSON out; table-driven over `examples/configs` | `tests/golden` | no |
-| Parsing unit | classification + normalization + chain split + glob/flag/path semantics per 07 examples and edge cases | `tests/golden/parsing` | no |
-| Config validation | valid/invalid rules-file fixtures; strict rejection of unknown fields/caps | `tests/config` | no |
-| Contract (hook) | hook vs a **mock checker** (scripted binary): spawn success/fail, timeout kill + grace, garbage/oversize/empty stdout, non-zero exits (incl. 2), schema-violating verdict, wrong `invocationId` echo, concurrency cap, tighten-only proof, cache TTL, deny budget | `tests/contract` | no |
+| Unit (checker) | analyzer fact catalogs (`analyzers`: sed-v1 in-place/program-form, export-v1 assignment, generic-xargs emptiness), letter parse/validation (`letter`), wire shapes and classification mapping (`verdict`), glob + lexical path comparison (`matcher`) | `src/checker/{analyzers,letter,verdict,matcher}.rs` | no |
+| Pipeline scenario matrix | `pipeline_tests`: the full evaluate() path per `06`/`07`/`08` — profile grammar, coverage proofs, redirect resolution (inherit/extend/replace), evidence states, wrapper/substitution/`xargs-v1` nesting, and the design's evaluation-scenario rows; the sed and xargs rows are scenario TEMPLATES whose surrounding profiles and rules are part of the test config (`tests/fixtures/sketch.jsonc` patterns) | `tests/pipeline_tests.rs` | no |
+| Property invariants | reorder-invariance (`reorder_rules_options_policies_keeps_verdicts`) and monotonicity (`added_allow_cannot_lower_ask`) — 08 §8.6 MUSTs | `tests/pipeline_tests.rs` | no |
+| Golden (checker CLI) | letter JSON in → verdict JSON out through the `shell-warden` binary, diffed against `expect` for every case | `tests/golden.rs` + `tests/golden/cases/*.json` | no |
+| Config validation | valid/invalid config fixtures; strict rejection of unknown fields/caps/unresolved references (06 §6.9) | `tests/` (via `load_str`) | no |
+| Contract (hook) | hook vs a **mock checker** (scripted binary): spawn success/fail, timeout kill + grace, garbage/oversize/empty stdout, non-zero exits (incl. 2), schema-violating verdict, wrong `invocationId` echo, concurrency cap, tighten-only proof, cache TTL, deny budget | `tests/contract` (hook repo) | no |
 | Integration | real OpenCode: allowlist scenario, deny with visible reason in native prompt, `onCheckerError: "deny"` drill (non-spawnable checker path), project-config-ignored warning | `tests/integration` (manual/CI with `opencode run`) | yes |
 
 ## 10.2 Golden format
@@ -19,37 +22,43 @@ contract against a scripted mock binary.
 ```jsonc
 // tests/golden/cases/vcs-no-force-push.json
 {
-  "config": "examples/configs/shell-warden.example.jsonc",
   "letter": { "version": 1,
               "invocation": { "id": "t1", "sessionID": "s1", "projectDir": "/repo" },
               "action": "shell",
-              "commands": [{ "index": 0, "raw": "git -C sub push --force origin main", "cwd": "/repo" }] },
-  "expect": { "verdict": "deny", "messageContains": "forbidden",
-              "commands": [{ "index": 0, "verdict": "deny", "ruleId": "vcs/no-force-push",
-                             "match": "argv" }] }
+              "commands": [{ "index": 0, "raw": "git push --force origin main", "cwd": "/repo" }] },
+  "expect": { "verdict": "deny", "message": "contains:forbidden",
+              "commands": [{ "index": 0, "ruleId": "git/deny-force-push" }] }
 }
 ```
 
-Runner diffs actual vs `expect` (subset match; extra fields ignored; an
-expected element carrying an `index` anchors to the actual element at that
-position of the parent array; `expect.message` supports a `contains:` prefix
-for substring assertions). Every rule in every example config MUST have at
-least one positive and one negative case. Spawn latency is measured here too
-(§10.6).
+The runner executes the built `shell-warden` binary with
+`examples/configs/shell-warden.example.jsonc` (the single shipped v2 example) and letter-in →
+verdict-out per case; the runner diffs actual vs `expect` (subset match; extra fields
+ignored; an expected element carrying an `index` anchors to the actual element at that
+position of the parent array; `expect.message` supports a `contains:` prefix for substring
+assertions). Every rule in the example config MUST have at least one positive and one
+negative case. Spawn latency is recorded per case (§10.6).
 
-## 10.3 Required adversarial cases
+## 10.3 Required adversarial cases (v2)
 
 | Case | Expected |
 |---|---|
-| `echo $(whoami)` against an allow rule for `echo *` | `ask` (opaque ⇒ allow inert) — I10 |
-| broad `push → allow` refined by narrow `push --all → ask` on `git push --all` | refinement discards the broad rule; `ask` survives and wins (08 §8.3); plain `git push` still `allow` |
-| `git status; rm -rf /` (chain in one raw) | split into parts; the `rm` part determines the aggregate; parts recorded in `commands[]` |
-| `bash -c 'git push --force'` on twinned `git` rules | wrapper unwrapped (07 §7.2); same verdicts as the direct command |
+| `echo $(whoami)` against an allow rule for `echo *` | `ask` — `opaque` evidence cannot allow (I10/I12) |
+| `git status --unknown-option` against a complete allow | `ask` — `invalid` evidence (unknown option) blocks allow but deny/ask still match (I12) |
+| `git log --oneline --oneline` where the option entry is `repeatable: false` | `ask` (`option-not-repeatable`) |
+| `git log` where the option entry is `required: true` | `ask` (`required-option-missing`) |
+| `git status > /tmp/other/x` vs a redirect policy rooted at `/tmp/reports` | `ask` (`redirect-policy-uncovered`) — a weaker non-redirect `paths` change never loosens it |
+| `GIT_DIR=/tmp/x git status` vs `environment: { "none": true }` | `ask` (`allow-coverage-missing`) |
+| `sed -i 's/a/b/' file` against a `sed-v1` profile whose rule denies fact `executionPrimitive: inPlace` | `deny` (analyzer emits the fact; the RULE emits the deny) |
+| `xargs rm -rf /` with `xargs-v1` and a nested `rm` profile denying exact `["/"]` + its recursive-force option | `deny` via the `analyzerCommand` nested part joining the lattice |
+| `git status; git push --force` (chain in one raw) | split into parts; the `rm`-like deny part dominates the aggregate; parts recorded in `facts` diagnostics |
+| `bash -c 'git push --force'` on twinned git rules | wrapper unwrapped (07 §7.2); same verdicts as the direct command |
+| reorder profiles, rules, options, hints, or policy entries | verdicts unchanged (reorder-invariance property test, 08 §8.6) |
+| add a matching allow where an ask already emits | still `ask` — an added allow cannot lower the lattice result |
+| rules file with a non-`ask` `defaults.action` | config invalid, exit 2, checker degrades — never fail-open |
 | letter > 64 KiB / > 32 commands | hook degrades locally, no spawn — I4 |
-| unknown flag vs allow rule (`git status --stealth-x`) | unknown flag ⇒ not fully parsed ⇒ `ask` (I10) |
 | hook receives verdict with foreign `invocationId` | degrade — I7 |
 | hook receives two JSON values on stdout | degrade |
-| rules file with `defaults.action: "allow"` | config invalid, exit 2, checker degrades — never fail-open |
 | deny budget: 4th deny of the same rule | hook silent; request to human (ADR-0010) |
 | stale allow after rules tightening | uncached next check sees new rules; cached allow bounded by TTL — I9 |
 
@@ -91,3 +100,15 @@ ADR-0016 accepted the per-check spawn on a measured basis
 budget ≤ 10 ms on the reference machine, and re-measurement on the board P3
 hardware before the hook ships configured with the default
 `checkTimeoutMs: 2000`.
+
+## 10.7 Pre-push gates (checker repo)
+
+Before every push (engineering host: macOS / darwin-aarch64), the same three gates hold and
+CI re-enforces them:
+
+1. `cargo test` — unit, property, and golden suites green;
+2. `cargo fmt --check`;
+3. `cargo clippy` — no warnings policy.
+
+The golden runner additionally records `spawnMs` per case; the µ-budget acceptance of §10.6
+is re-measured on the board hardware before the hook ships with migrated config defaults.
