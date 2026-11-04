@@ -23,6 +23,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 |---|---|---|
 | `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](schemas/shell-warden.letter.v1.schema.json), [`schemas/shell-warden.verdict.v1.schema.json`](schemas/shell-warden.verdict.v1.schema.json), [`schemas/shell-warden.config.v1.schema.json`](schemas/shell-warden.config.v1.schema.json) |
 | `shell-legible` (readability gate, standalone binary) + `opencode-shell-legible-hook` (planned) | — | — |
+| `opencode-skills` (public standalone OpenCode v2 skill pack) | [`spec/opencode-skills/`](spec/opencode-skills/README.md) | — |
 
 ## Decisions index
 
@@ -44,6 +45,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0014](adr/0014-payload-shape-untrusted.md) | Payload shape is untrusted; adapter normalization (referenced on the engine side in v1) | Accepted |
 | [0015](adr/0015-engine-language-rust.md) | Decision component and reference tools in Rust | Accepted |
 | [0016](adr/0016-two-tier-enforcement.md) | Two-tier enforcement: thin hook → one-shot shell-warden decision binary (supersedes 0002/0005/0007/0008) | Proposed |
+| [0017](adr/0017-public-opencode-skills-repository.md) | Public repository-managed standalone OpenCode skills | Accepted |
 
 ## Conventions
 
