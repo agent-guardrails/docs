@@ -1,8 +1,7 @@
 # 09 — Security: Trust Model, Invariants, Fail-Closed Matrix
 
-Version 2.1 · 2026-11-04 · Revised for checker configuration v2 (command profiles) per
-[docs#15](https://github.com/agent-guardrails/docs/issues/15); ADR-0016 remains the
-architecture baseline.
+Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
+[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md).
 
 ## 9.1 Trust boundaries
 
@@ -35,6 +34,7 @@ architecture baseline.
 | I13 | Redirect policies are coverage infrastructure, never votes: the effective redirect policy covers only redirect structure and redirect-target coordinates, cannot rescue an allow that fails any other dimension, and `match.redirects` (plus redirect-coordinate `match.paths`) is invalid on allow. Local deny/ask votes remain dominant under the fixed lattice |
 | I14 | Order independence: profile selection, redirect-policy resolution, and vote reduction are order-free. Reordering or adding allow rules, options, hints, or policy entries MUST NOT lower any verdict, and no priority/refinement/first-match semantics exist (08 §8.6) |
 | I15 | Catalog closure without I/O: analyzers, fact names, redirect operators, target kinds, relations, option arities, and lexical-alias equivalence are held in closed, versioned implementation-owned tables and are machine-checkable from the config text alone — no filesystem, PATH, or network lookup participates in validation or allow coverage. Evidence production performs no I/O |
+| I16 | Public configuration is the draft-2020-12 schema shape, not a language-specific DTO layout. Every tagged selector has one discriminator and direct payload; nested Serde wrappers, unknown keys, type coercion, omitted allow dimensions, positive-arity entries without value coverage, and v1/legacy forms are invalid |
 
 ## 9.3 Threat model (selected vectors)
 
@@ -50,6 +50,7 @@ architecture baseline.
 | T8 | Secrets leakage via letter/verdict/debug log | letter contains command text + ids + cwd + agent only; checker environment empty; payload caps (I6); debug dir outside projects (03 §3.5) |
 | T9 | Selecting one path-like token to stand for filesystem meaning | v2 contributions are lexical only: cwd-joined, component-wise compare with `.`/`..` normalization (07 §7.6); no symlink/stat/mount/PATH resolution; `/work/repo2` is NOT within `/work/repo`; resolved-binary identity is outside the checker model |
 | T13 | Homogeneous allow via alias spellings (`-f` vs `--force`, `node` vs `nodejs`) | alias spellings normalize to the same canonical option ID (repeated occurrences when used twice — 06 §6.3); multi-spelling `executables` assert identical grammar, never binary identity (09 I15) |
+| T14 | Policy author relies on DTO-shaped nested unions, implicit coercion, or an omitted coverage dimension | schema-first validation rejects the configuration before evaluation (I16); only one-level selectors with direct payloads are public input |
 | T10 | Hung/slow checker DoS of the agent loop | per-check deadline + graceful kill (02 §2.1); spawn concurrency cap (04 §4.2); one bad check isolates itself |
 
 ## 9.4 Fail-closed matrix (normative)

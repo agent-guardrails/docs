@@ -1,0 +1,7 @@
+{
+  "analyzer": "sed-v1",
+  "version": 1,
+  "name": "executionPrimitive",
+  "occurrence": "all",
+  "value": { "exact": "readOnly" }
+}

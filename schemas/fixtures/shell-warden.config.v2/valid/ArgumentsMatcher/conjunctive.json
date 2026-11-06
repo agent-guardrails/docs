@@ -1,0 +1,4 @@
+{
+  "prefix": ["push"],
+  "containsAny": ["origin", "main"]
+}

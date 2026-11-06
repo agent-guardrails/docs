@@ -1,0 +1,1 @@
+{ "each": { "oneOf": ["json", "yaml"] } }

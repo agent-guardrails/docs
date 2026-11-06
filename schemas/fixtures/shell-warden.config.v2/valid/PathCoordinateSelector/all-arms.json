@@ -1,0 +1,7 @@
+[
+  { "argument": { "index": 1 } },
+  { "optionValue": { "option": "file", "occurrence": "all", "valueOrdinal": 1 } },
+  { "environment": { "occurrence": "all" } },
+  { "redirect": { "operator": ">", "sourceFd": "default", "occurrence": "all" } },
+  { "analyzerFact": { "analyzer": "sed-v1", "version": "1", "name": "executionPrimitive", "occurrence": "all" } }
+]

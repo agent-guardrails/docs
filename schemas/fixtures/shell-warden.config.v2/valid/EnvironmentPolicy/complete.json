@@ -1,0 +1,6 @@
+{
+  "name": "LANG",
+  "value": { "oneOf": ["C", "C.UTF-8"] },
+  "prefix": true,
+  "occurrence": "all"
+}

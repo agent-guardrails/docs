@@ -1,0 +1,12 @@
+[
+  { "mode": "inherit" },
+  { "mode": "extend", "policies": ["safe-local-io"] },
+  {
+    "mode": "extend",
+    "inline": {
+      "redirects": { "none": true },
+      "paths": { "none": true }
+    }
+  },
+  { "mode": "replace", "policies": ["no-redirects"] }
+]

@@ -1,9 +1,8 @@
 # 07 — Parsing (normative for the checker)
 
-Version 2.1 · 2026-11-04 · Revised for checker configuration v2 (command profiles) per
-[docs#15](https://github.com/agent-guardrails/docs/issues/15) with
-[ADR-0016](../../adr/0016-two-tier-enforcement.md) retained as the architecture baseline:
-parsing is the checker's own and complete; harness-supplied splitting is never trusted.
+Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
+[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md). Parsing remains the
+checker's own and complete; harness-supplied splitting is never trusted.
 
 Parsing is the checker's own (ADR-0016): one scanner turns raw command text into segments per
 operator, and a recursive extractor turns segments into the complete executable-part and
@@ -44,8 +43,8 @@ The parsed relations are a CLOSED enum:
 | `chain` | Operator-bounded executable segment (the default root relation) |
 | `pipeline` | Segment following `\|` |
 | `wrapper` | Recursive unwrap of a transparent interpreter (below) — children of the wrapper part |
-| `commandSubstitution` | Inner text of `$(…)`, deprecated backticks, and process substitution, split recursively |
-| `analyzerCommand` | MAY be emitted ONLY by an analyzer (xargs-v1); prevents analyzers from duplicating ordinary shell nesting |
+| `command-substitution` | Inner text of `$(…)`, deprecated backticks, and process substitution, split recursively |
+| `analyzer-command` | MAY be emitted ONLY by an analyzer (`xargs-v1`); prevents analyzers from duplicating ordinary shell nesting |
 
 Wrappers unwrap into child parts; the wrapped command evaluates on its own under relation
 `wrapper`:
@@ -57,16 +56,16 @@ Wrappers unwrap into child parts; the wrapped command evaluates on its own under
 | `nice` | `-n N` is skipped; other wrapper options are opaque |
 | `timeout` | the duration argument (`<n>[smhd]`) is skipped and validated; a missing or non-parsing duration is opaque |
 | `env` | assignments are transparent prefixes; wrapper options are opaque |
-| `xargs` | stays VISIBLE: emits the operand as an opaque child and marks itself opaque ("executes from stdin") — the child only becomes a matchable `analyzerCommand` part when the selected profile runs `xargs-v1` (08 §8.4) |
+| `xargs` | stays VISIBLE: emits the operand as an opaque child and marks itself opaque ("executes from stdin") — the child only becomes a matchable `analyzer-command` part when the selected profile runs `xargs-v1` (08 §8.4) |
 
 A wrapper part that has been unwrapped ("collapsed") carries no votes, no selected profile,
 and contributes no independent evidence of its own — its children carry the execution
 semantics. Collapsed parts collide with nothing: they are excluded from selection, reduction,
 and the evidence-state aggregates in one pass.
 
-Command substitution children emit BEFORE (in evaluation order of) the surrounding part;
-nesting is bounded at 8 levels — deeper nesting is an `opaque` part with the
-`evidence-limit` reason, not a harder failure.
+Command substitution children emit BEFORE (in evaluation order of) the surrounding part.
+Shell and nested-part depth is bounded at 32; exceeding that bound makes affected evidence
+`invalid` with the `evidence-limit` reason and therefore unable to allow.
 
 ## 7.3 Evidence states (closed)
 
@@ -95,13 +94,10 @@ Stable reason codes (the implemented spellings — 08 §8.5):
 | `required-option-missing` | `required: true` option entry had no occurrence. |
 | `option-not-repeatable` | More occurrences than `"repeatable": false` permits. |
 | `option-not-allowed` | Observed option not in the `allowed` coverage set. |
-| `option-values-uncovered` | Consumed or inline option values not covered by the entry's `values` selector. |
+| `option-value-uncovered` | A consumed or inline option value is not covered by an `each` selector. |
+| `option-value-position-uncovered` | A consumed value is not covered by its `byPosition` ordinal selector. |
 | `remainder-uncovered` | Prefix remainder tokens not covered by the remainder policy. |
 | `redirect-policy-uncovered` | Redirect occurrence or target not covered by the effective redirect policy. |
-
-> NOTE — two spellings differ from the design draft: the implemented codes are
-> `option-values-uncovered` and `remainder-uncovered` (the draft sketched option-value
-> hyphenations). These spellings are normative here.
 
 ## 7.4 Tokens and quote classes
 
@@ -178,7 +174,7 @@ other.
 - `deny`/`ask` messages MUST be prescriptive: tell the agent what to do ("push to a branch and
   open a pull request"), not just what failed. Hook-side deny budgets (ADR-0010) still assume
   one iteration usually suffices.
-- `facts` ≤ 16 KiB, depth ≤ 8, no secrets (I6). Edges: `allow` never carries a message;
+- `facts` ≤ 16 KiB, no secrets (I6). Edges: `allow` never carries a message;
   aggregate `deny` falls back to the constant `"denied by shell-warden policy"` when no rule
   carried a message (08 §8.6).
 - Messages: rule templates + allowlisted interpolation only (I11); checker error text never

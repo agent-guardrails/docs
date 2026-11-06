@@ -1,18 +1,20 @@
 # HANDOFF — Checker implementation (next session kickoff)
 
-Reference: [ADR-0016](../../adr/0016-two-tier-enforcement.md) (two-tier enforcement) is the
-source of truth; spec v2.0 in this directory mirrors it (02 letter/verdict, 06 rules grammar,
-07 parsing, 08 pipeline). Schemas: `schemas/shell-warden.{letter,verdict,config}.v1.schema.json`.
+References: [ADR-0016](../../adr/0016-two-tier-enforcement.md) defines two-tier enforcement;
+[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md) defines the public
+configuration contract. Specs 06–10 and `schemas/shell-warden.config.v2.schema.json` mirror the
+accepted design. Letter and verdict remain on their separately versioned v1 schemas until their
+coordinated diagnostics update.
 The retired M0 engine (persistent, ADR-0002/0005/0008) stays in `agent-guardrails/shell-warden`
 as reference only — do not extend it; new work is the one-shot decision binary.
 
 ## Board
 
-- `P1 · shell-warden v2: sync спеки — ADR-0016` — **this PR closes the spec-sync slice**;
-  implementation continues under:
-- `P2 · shell-warden: реализация checker'а (Rust) — wire → split → шаблон-матч → вердикт + E2E с шимом`
-  (n.b. per ADR-0016: one-shot letter/verdict, not the NDJSON wire protocol).
-- `P3 · shell-warden E2E: шим → shell-warden → тул на живом OpenCode v2.2.5`.
+- [docs issue 21](https://github.com/agent-guardrails/docs/issues/21) owns the schema-first
+  configuration contract alignment.
+- Checker implementation follows in the `shell-warden` repository: one-shot letter/verdict,
+  not the retired NDJSON protocol.
+- Hook integration and live OpenCode E2E remain separate repository tickets.
 
 ## Toolchain
 
@@ -22,11 +24,11 @@ Rust toolchain installed on the dev machine (M0 session used it); start `cargo c
 
 | Step | Unit | Spec + acceptance |
 |---|---|---|
-| 1 | Grammar types + config loader | 06 + config schema: strict validation, unknown field ⇒ invalid, caps; golden fixtures for invalid configs |
+| 1 | Public DTO adapter + config loader | 06 + draft-2020-12 config schema: validate the public one-level shape before conversion; valid/invalid fixture families; engine-only cross-reference/catalog checks |
 | 2 | Normalizer + classifier | 07 §7.3–7.4; unit-heavy: each unresolvable step ⇒ opaque; table-driven cases |
 | 3 | Recursive chain splitter | 07 §7.2; golden case per construct (operators, wrappers, substitutions, redirects); never trust the letter's split |
-| 4 | Matcher: flags table, conditions | 06 §6.4–6.5 + schema; argv/argValue/pattern/flag/flagValue per 07 §7.5 (stage-anchor tail; argValue = flat glob array, the positional mirror of flagValue) |
-| 5 | Pipeline: refinement → first-deny → reduction → message | 08 §8.2–8.5; refinement unit tests (bash-guard code as reference) |
+| 4 | Matcher and coverage engine | 06 §6.4–6.9 + schema; string/token/path/typed selectors, fixed-arity options, occurrence-aware universal coverage |
+| 5 | Pipeline | 08 §8.2–8.5; predicate satisfaction → allow coverage validation → fixed lattice reduction → message |
 | 6 | Letter/verdict IO + CLI | 02 + schemas; exit codes 0/1/2; schema-conformance both directions |
 | 7 | Golden runner + measurement | 10 §10.2/§10.6; every rule ≥ 1 positive + negative case; p95 ≤ 10 ms gate |
 

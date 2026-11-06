@@ -1,0 +1,6 @@
+{
+  "byPosition": [
+    { "regex": "[a-z]+" },
+    { "path": { "within": "/work/project" } }
+  ]
+}
