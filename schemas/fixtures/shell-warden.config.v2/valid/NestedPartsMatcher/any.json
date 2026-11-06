@@ -1,0 +1,11 @@
+{
+  "any": [
+    {
+      "relation": "analyzer-command",
+      "occurrence": 1,
+      "profile": "rm-safe",
+      "classification": "complete",
+      "verdict": "deny"
+    }
+  ]
+}

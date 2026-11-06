@@ -1,0 +1,8 @@
+{
+  "any": [
+    {
+      "coordinate": { "argument": { "index": 1 } },
+      "exact": "/work/project/README.md"
+    }
+  ]
+}

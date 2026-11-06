@@ -1,6 +1,6 @@
 # shell-warden — Specification Set
 
-Spec v2.0 · Status: retired M0 engine exists as reference (`agent-guardrails/shell-warden`);
+Specification set · Status: retired M0 engine exists as reference (`agent-guardrails/shell-warden`);
 v2 target architecture per ADR-0016: **thin hook + one-shot decision binary**
 (`agent-guardrails/opencode-shell-warden-hook` + `shell-warden`)
 
@@ -43,6 +43,7 @@ state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
   `shell-warden` repository. **Letter / verdict** = the request/response JSON of 02.
 - All durations are integer milliseconds. All budget clamps are enforced with warn+clamp, never silently.
 - Spec changes: bump the doc version and the relevant `version` field of the matching schema.
-- Revision status: 02 and 06–10 revised to v2.1 (command profiles, config v2 per
-  [docs#15](https://github.com/agent-guardrails/docs/issues/15)); 01, 03, 04, 11 remain at
-  v2.0 (ADR-0016); 05 retired.
+- Revision status: 06–11 are v2.2 under
+  [ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md) and
+  [docs issue 21](https://github.com/agent-guardrails/docs/issues/21). Document 02 remains v2.1;
+  01, 03, and 04 remain v2.0 under ADR-0016; 05 remains retired.

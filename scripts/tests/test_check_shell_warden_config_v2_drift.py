@@ -13,6 +13,7 @@ FIXTURE: Final = ROOT / "scripts/tests/fixtures/grammar-target.rs"
 SNAPSHOT: Final = ROOT / "schemas/shell-warden.config.v2.grammar.snapshot"
 BEGIN_MARKER: Final = "// shell-warden-config-v2-grammar: begin"
 END_MARKER: Final = "// shell-warden-config-v2-grammar: end"
+SUBPROCESS_TIMEOUT_SECONDS: Final = 5.0
 
 
 class DriftGuardTests(unittest.TestCase):
@@ -29,6 +30,7 @@ class DriftGuardTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
+            timeout=SUBPROCESS_TIMEOUT_SECONDS,
         )
 
     def run_mutation(self, old: str, new: str) -> subprocess.CompletedProcess[str]:

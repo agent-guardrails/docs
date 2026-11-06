@@ -1,0 +1,10 @@
+{
+  "all": [
+    {
+      "operator": ">&",
+      "sourceFd": 2,
+      "targetKind": "fd",
+      "occurrence": 1
+    }
+  ]
+}

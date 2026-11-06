@@ -74,17 +74,24 @@ and the fixture runner validates every element independently. `Config` selects t
 | argument predicates | `ArgumentsMatcher` | `ArgumentsMatcher` |
 | positional remainder policy | `RemainderPolicy` | `RemainderPolicy` |
 | string/path token selectors | `TokenSelector` | `TokenSelector` |
+| lexical path selector arms, including `exact` | `PathSelector` | `PathSelector` |
 | ordinary option predicates | `OptionsMatcher` | `OptionsMatcher` |
 | zero-arity option coverage | `OptionCoverage` | `OptionCoverage` |
 | positive-arity option coverage | `PositiveArityOptionCoverage` | `PositiveArityOptionCoverage` |
 | replacement for old `ValuesCoverage` | `OptionValueCoverage` | `OptionValueCoverage` |
 | complete allow option policy | `OptionsCoverage` | `OptionsCoverage` |
 | redirect structure and target paths | `RedirectPolicy`, `RedirectPolicyOverride` | `RedirectPolicy`, `RedirectPolicyOverride` |
+| ordinary redirect predicates (`any`, `all`) | `RedirectMatcher` | `RedirectMatcher` |
 | lexical path coordinates and policies | `PathCoordinateSelector`, `PathPolicy` | `PathCoordinateSelector` |
+| ordinary lexical-path predicates (`any`) | `PathsMatcher` | `PathsMatcher` |
 | positional path coordinates | `PositionalCoordinate` | `PositionalCoordinate` |
+| ordinary environment predicates (`any`) | `EnvironmentMatcher` | `EnvironmentMatcher` |
 | environment occurrence coverage | `EnvironmentPolicy` | `EnvironmentPolicy` |
+| ordinary typed fact predicates (`any`) | `FactsMatcher` | `FactsMatcher` |
 | typed analyzer-fact coverage | `FactPolicy`, `TypedValueSelector` | `FactPolicy`, `TypedValueSelector` |
+| ordinary nested-part predicates (`any`) | `NestedPartsMatcher` | `NestedPartsMatcher` |
 | nested executable-part coverage | `NestedPartPolicy` | `NestedPartPolicy` |
+| ask/deny rule composition | `Rule` | `Rule` |
 | fail-closed allow composition | `AllowMatch` | `AllowMatch` |
 | complete configuration | `Config` | `Config` |
 
