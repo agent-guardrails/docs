@@ -1,9 +1,9 @@
 # 08 — Decision Pipeline (checker) & Hook Application
 
-Version 2.1 · 2026-11-04 · Revised for checker configuration v2 (command profiles) per
-[docs#15](https://github.com/agent-guardrails/docs/issues/15): rules vote inside the binary
-and reduce by the fixed lattice; there is no refinement phase, no first-match semantics and no
-configuration-order meaning; the hook applies tighten-only and owns per-session state.
+Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
+[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md): rules vote inside the
+binary and reduce by the fixed lattice; there is no refinement phase, first-match semantics,
+configuration-order meaning, or compatibility grammar.
 
 ## 8.1 Checker pipeline (per letter)
 
@@ -14,7 +14,7 @@ for each command:
     split (07 §7.2)         → recursive executable-part extraction; scanner-split is NEVER trusted
     select profile per part → lexical, unique by config validation (§8.2)
     parse options per part  → per-profile grammar (06 §6.3); failures ⇒ invalid evidence
-    run analyzer per part   → closed fact catalog; xargs-v1 may emit analyzerCommand parts (§8.4)
+    run analyzer per part   → closed fact catalog; xargs-v1 may emit analyzer-command parts (§8.4)
     produce path coordinates from the profile's pathSources (§8.5)
     resolve effective redirect policy for every allow rule (§8.4 reduction step 1)
     match rules and collect votes (§8.3); allow additionally needs the coverage proof (§8.3)
@@ -33,11 +33,11 @@ emits its vote.
 1. **Selection is lexical**: the profile owning the part's head token (06 §6.3). The head
    MUST be a resolvable literal token; an unresolvable head selects no profile. The head is
    evidence of selection and is NOT part of the positional arguments.
-2. **Option parsing (06 §6.3)** runs on the argv AFTER the head: inline `--alias=value` for
-   eligible arity-1 options, exact alias matches consuming `arity` following tokens, safe
-   short clusters (every cluster character a declared alias; earlier characters arity-0; only
-   the last may take values), the `--` boundary ending recognition, and everything after it
-   positional. Unknown options, missing values, and invalid inline forms turn the part
+2. **Option parsing (06 §6.3)** runs on the argv AFTER the head: inline `--alias=value` only
+   for arity-one options that explicitly declare `inline: true`, exact alias matches consuming
+   their fixed `arity` of zero through four following tokens, the `--` boundary ending
+   recognition, and everything after it positional. The parser does not infer aliases or option
+   boundaries from token spelling. Unknown options, missing values, and invalid inline forms turn the part
    `invalid` (07 §7.3); the FIRST observed reason annotates the part.
 3. **No selected profile** ⇒ no rule of that part may run; the part reduces to the bare
    default ask, and its evidence state still contributes to the command's classification
@@ -46,7 +46,7 @@ emits its vote.
 5. **Analyzers**: when the selected profile declares an analyzer, the analyzer inspects the
    head token and the post-option-parsing positionals and emits facts from its closed
    catalog. Only `xargs-v1` may additionally relabel an emitted child as an
-   `analyzerCommand` part (07 §7.2). Analyzers never load config code, never issue a verdict,
+   `analyzer-command` part (07 §7.2). Analyzers never load config code, never issue a verdict,
    and never grant a command.
 
 ## 8.3 Rules, votes, and reduction
@@ -75,7 +75,7 @@ emits its vote.
 
 Children reduce before parents (ids are ordered); a parent's `nestedParts` selectors see the
 child's relation, relation occurrence, selected profile, evidence state, reduced verdict, and
-— for `analyzerCommand` parts — the originating analyzer. An allow requiring
+— for `analyzer-command` parts — the originating analyzer. An allow requiring
 `nestedParts` coverage over a nested part MUST therefore be covered with the child's already
 reduced verdict (e.g. `verdict: "allow"` only when the child itself passed its coverage
 proof).
@@ -85,7 +85,8 @@ proof).
 Before voting, the profile's `pathSources` declarations (06 §6.3) produce the actual
 per-occurrence non-redirect path coordinates (`argument(index)`,
 `optionValue(canonicalOptionId, optionOccurrence, valueOrdinal)`,
-`environment(assignmentOccurrence)`, `analyzerFact(analyzerId, factName, factOccurrence)`);
+`environment(assignmentOccurrence)`,
+`analyzerFact(analyzerId, version, factName, factOccurrence)`);
 a path selector with no observable coordinate produces none. Redirect target coordinates are
 parser-produced (07 §7.5) and covered only by the effective redirect policy — never by
 `match.paths`. Rules cannot cause new evidence to be produced: a profile with no matching

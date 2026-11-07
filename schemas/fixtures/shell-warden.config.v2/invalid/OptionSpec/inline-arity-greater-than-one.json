@@ -1,0 +1,5 @@
+{
+  "aliases": ["--rename"],
+  "arity": 2,
+  "inline": true
+}

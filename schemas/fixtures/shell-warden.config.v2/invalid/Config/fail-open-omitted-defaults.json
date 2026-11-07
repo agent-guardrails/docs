@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "redirectPolicies": {
+    "no-redirects": {
+      "redirects": { "none": true },
+      "paths": { "none": true }
+    }
+  },
+  "profiles": []
+}

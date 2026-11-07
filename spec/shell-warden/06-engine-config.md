@@ -1,10 +1,10 @@
 # 06 — Checker Configuration: Command Profiles (v2)
 
-Version 2.1 · 2026-11-04 · Checker configuration v2 (command profiles) accepted per
-[docs#15](https://github.com/agent-guardrails/docs/issues/15)
-([design/shell-warden-config-v2.md](../../design/shell-warden-config-v2.md)); the v2 profile
-grammar supersedes the v1 stage grammar of ADR-0016 (retained as a non-normative appendix at
-the end of this document for the v1→v2 migration reference).
+Version 2.2 · 2026-11-06 · Schema-first checker configuration v2 accepted by
+[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md) and tracked by
+[docs#21](https://github.com/agent-guardrails/docs/issues/21). The accepted
+[configuration design](../../design/shell-warden-config-v2.md) defines the public shapes that
+this specification and the schema make normative.
 
 Schema: `schemas/shell-warden.config.v2.schema.json` (`defaults`, `limits`, `redirectPolicies`,
 `profiles`). A v2 checker reads v2 only; backward compatibility, automatic translation, and
@@ -33,28 +33,30 @@ invalid config. The `configBytes` cap is checked on the raw file bytes before pa
 
 ```jsonc
 {
-  "version": 2,                        // REQUIRED, MUST be 2
-  "defaults": {                        // §6.3 — all fields default
-    "action": "ask",                   // MUST be "ask" (fail-closed; nothing else accepted)
-    "message": "No approved command profile matched.",   // optional generic ask message, ≤ 512 chars
-    "redirectPolicy": "safe-local-io"  // named policy in effect for every profile and allow rule
+  "version": 2,
+  "defaults": {
+    "action": "ask",
+    "redirectPolicy": "no-redirects"
   },
-  "limits": {                          // all fields optional; defaults below
-    "configBytes": 262144,
-    "profiles": 256,
-    "rules": 4096,
-    "evidenceItems": 1024,
-    "diagnosticsBytes": 16384
+  "redirectPolicies": {
+    "no-redirects": {
+      "redirects": { "none": true },
+      "paths": { "none": true }
+    }
   },
-  "redirectPolicies": { /* §6.8 — named, flat, reusable bundles */ },
-  "profiles": [ /* §6.3 — unordered; profile order MUST NOT change meaning */ ]
+  "profiles": []
 }
 ```
 
-`defaults.redirectPolicy` is REQUIRED when any rule of any profile has `"action": "allow"`.
-When it is omitted and no allow rule exists, the explicit name `no-redirects` (both coverage
-dimensions `none`) is available implicitly; a named-policy reference inside any override still
-requires a declared bundle.
+The optional `limits` object has `configBytes`, `profiles`, `rules`, `evidenceItems`, and
+`diagnosticsBytes` keys only. Omitted keys use the maxima in the accepted design; configured
+values are positive integers no larger than those maxima.
+
+`defaults`, `redirectPolicies`, and `profiles` are REQUIRED. `defaults.action` and
+`defaults.redirectPolicy` are REQUIRED inside `defaults`; the action MUST be `"ask"`, and the
+policy name MUST resolve to a declared bundle. There is no implicit bundle. A configuration
+that permits no redirects declares a named bundle whose `redirects` and `paths` are both
+`{ "none": true }`.
 
 ## 6.3 Command profiles (executable selection and option grammars)
 
@@ -69,10 +71,10 @@ A **profile** owns the complete lexical grammar and policy for one executable. I
     "path":  { "aliases": ["-C"], "arity": 1, "inline": false }
   },
   "pathSources": [],                   // optional path-coordinate producers (§6.7, closed selectors)
-  "redirectPolicy": { /* optional override, §6.8 */ },
+  "redirectPolicy": { "mode": "inherit" },
   "analyzer": "generic-v1",            // optional closed analyzer id
-  "rules": [ /* §6.4 */ ],
-  "fallbackHints": [ /* optional non-voting messages for the bare default ask */ ]
+  "rules": [],
+  "fallbackHints": []
 }
 ```
 
@@ -80,35 +82,38 @@ A **profile** owns the complete lexical grammar and policy for one executable. I
   contain the part's head token; the part's head MUST be a resolvable literal token. The head
   token is evidence of selection and is NOT part of the positional arguments (08 §8.2).
 - A singleton `executables` list is always valid. A multi-spelling list MUST equal one complete
-  entry of the implementation-owned, versioned lexical alias catalog; the current entries are
-  `["node", "nodejs"]` and `["python", "python3"]`. Such an entry asserts identical option
-  grammar and analyzer behavior — it does NOT assert resolved binary identity. Unrelated
-  executables MUST get separate profiles.
+  entry of the implementation-owned, versioned lexical alias catalog. Such an entry asserts
+  identical option grammar and analyzer behavior — it does NOT assert resolved binary identity.
+  Unrelated executables MUST get separate profiles.
 - **Option grammar.** `arity` 0 is a flag; arity 1–4 consumes that many following tokens as
   values, regardless of their shape. Aliases (1–16 per option, each 1–32 chars) are exactly as
   they appear in argv and MUST be unique inside the profile; two aliases of one canonical ID
   normalize to repeated canonical occurrences. The inline form `--alias=value` is valid only
-  for a declared arity-1 option and only unless the option sets `"inline": false`.
+  for a declared arity-1 option with `"inline": true`. For arity zero and arities two through
+  four, `inline` MUST be absent or `false`; those positive arities always consume separate
+  following tokens. Variadic, minimum/maximum arity, and option remainder forms do not exist.
 - **Analyzer.** `analyzer` names one closed built-in: `generic-v1`, `sed-v1`, `export-v1`,
   `xargs-v1`. They are versioned evidence producers, never extension points, never verdict
-  issuers, never policy loaders (§6.7, 08 §8.4). The closed compatibility table restricts
-  `sed-v1` profiles to the canonical option IDs `inPlace`, `expression`, `file`; the other
-  analyzers impose no canonical-ID table (their fact catalogs have modeled option grammars
-  only via `sed-v1`).
+  issuers, never policy loaders (§6.7, 08 §8.4). Implementation-owned, versioned compatibility
+  and fact-catalog tables validate analyzer/profile combinations, fact names, and fact types.
 
 ## 6.4 Rule schema (v2)
 
 ```jsonc
 {
-  "id": "git/deny-force-push",               // REQUIRED, 1–128 chars, unique per profile
-  "action": "deny",                          // REQUIRED, "allow" | "ask" | "deny"
+  "id": "git/deny-force-push",
+  "action": "deny",
   "message": "Push without force, or create a branch and open a pull request.",
-                                             // ≤ 512 chars; SHOULD be present on deny/ask (07 §7.7);
-                                             // ignored on allow
-  "match": { /* REQUIRED, §6.6/§6.7 */ },
-  "redirectPolicy": { /* OPTIONAL; allow rules only, §6.8 */ }
+  "match": {
+    "arguments": { "prefix": ["push"] },
+    "options": { "presentAny": ["force"] }
+  }
 }
 ```
+
+Rule IDs are 1–128 chars and unique per profile. `action` is `allow`, `ask`, or `deny`.
+Ask/deny messages are at most 512 chars. A `redirectPolicy` override is optional on allow rules
+only.
 
 `match` is written once; its meaning depends on the action:
 
@@ -125,7 +130,9 @@ A **profile** owns the complete lexical grammar and policy for one executable. I
 | `arguments.exact` / `arguments.prefix` | ANCHORED positional sequences: the listed tokens match positionally from index 0; trailing tokens beyond the listed ones are irrelevant to the ordinary meaning. For allow, `exact` covers the whole positional list (§6.7). |
 | `arguments.containsAny` | **∃ token × ∃ glob** — some positional token matches some listed glob. Ask/deny only. |
 | `raw` | Glob on the part's raw text (OpenCode-compatible): `*` = zero+ chars including spaces; `?` = one char; a trailing `" *"` also matches the bare command. Ask/deny only. |
-| occurrence selectors | `"all"` or a 1-based occurrence number, wherever a dimension names occurrences (`options`-less dimensions, redirect entries, nested parts). |
+| occurrence selectors | `"all"` or a positive 1-based occurrence number. |
+| string-value selector | Exactly one of `{ "any": true }`, `{ "oneOf": [literal, ...] }`, or `{ "regex": pattern }`. `oneOf` is non-empty and duplicate-free. Regex uses bounded, whole-value `re2-v1` matching. |
+| token selector | One string-value selector or `{ "path": pathSelector }`. A path selector is exactly one of `exact`, `within`, or `outside`, with a normalized absolute lexical path. |
 
 ## 6.6 Action-sensitive `match`: ordinary predicates (ask/deny)
 
@@ -136,12 +143,12 @@ empty.
 | Dimension | Type (v2, wire names) | Ordinary meaning |
 |---|---|---|
 | `arguments` | `exact` / `prefix` (anchored sequences), `containsAny` | as §6.5; an explicit `remainder` is an allow-only form and MUST be rejected on ask/deny |
-| `options` | `presentAll`, `presentAny`, `absentAll` (canonical ID lists), `values` (map ID → glob list) | presence tests over canonical IDs; `values` holds when any occurrence's value matches any listed glob; every referenced ID MUST be a declared profile option; `none: true` requires no option at all and excludes presence/value conditions (the `allowed` coverage form is allow-only) |
-| `environment` | `none` \| `any` \| `all` of `EnvironmentTest` (name, exact `value`, `prefix`) | exactly one of `none`/`any`/`all`; `any` = ∃ assignment × ∃ test, `all` = ∀ assignment ∃ test; `prefix: true` requires the assignment to sit in the command prefix |
-| `redirects` | `none` \| `any` \| `all` of `RedirectTest` (operator, `sourceFd`, `targetKind`) | exactly one of `none`/`any`/`all`; omitted test dimensions are unconstrained; `targetKind` distinguishes `literalPath` from `fd`; `redirects` is invalid on allow (§6.7) |
+| `options` | `presentAll`, `presentAny`, `absentAll` (canonical ID lists), `values` (map ID → `TokenSelector`) | presence tests over canonical IDs; `values` holds when any occurrence value satisfies its selector; every referenced ID MUST be a declared profile option; `none: true` requires no option at all and excludes presence/value conditions (the `allowed` coverage form is allow-only) |
+| `environment` | `none` \| `any` \| `all` of `EnvironmentTest` (`name`, optional string-value `value`, `prefix`, `occurrence`) | exactly one of `none`/`any`/`all`; `any` = ∃ assignment × ∃ test, `all` = ∀ assignment ∃ test; `prefix: true` requires the assignment to sit in the command prefix |
+| `redirects` | `none` \| `any` \| `all` of `RedirectTest` (`operator`, `sourceFd`, `targetKind`, `occurrence`) | exactly one of `none`/`any`/`all`; omitted test dimensions are unconstrained; `targetKind` distinguishes `literalPath` from `fd`; `redirects` is invalid on allow (§6.7) |
 | `paths` | `none` \| `any` \| `all` of `PathEntry` (coordinate selector + exactly one of `exact`/`within`/`outside`) | predicates over the path coordinates the profile's `pathSources` produced; `within`/`outside` roots MUST be absolute lexical paths; redirect-coordinate `paths` on allow are invalid (§6.7) |
-| `facts` | `none` \| `any` \| `all` of `FactTest` (analyzer, name, exact/glob `value`) | exactly one of `none`/`any`/`all`; every `name` MUST be in the closed fact catalog of the profile's analyzer, which MUST be declared |
-| `nestedParts` | `none` \| `any` \| `all` of `NestedPartTest` (relation, executable, profile, analyzer, state, verdict, occurrence) | exactly one of `none`/`any`/`all`; `profile` MUST name a declared profile id; `state` ∈ `complete` \| `opaque` \| `invalid`; `verdict` ∈ `allow` \| `ask` \| `deny` |
+| `facts` | `none` \| `any` \| `all` of `FactTest` (`analyzer`, `version`, `name`, `occurrence`, typed `value`) | exactly one of `none`/`any`/`all`; every `name` and value type MUST agree with the closed catalog of the profile's declared analyzer |
+| `nestedParts` | `none` \| `any` \| `all` of `NestedPartTest` (`relation`, `occurrence`, `profile`, `classification`, `verdict`) | exactly one of `none`/`any`/`all`; relation is the hyphenated closed wire enum; `profile` is a declared profile id or `"none"` |
 | `classification` | one of `complete` \| `opaque` \| `invalid` | the part's evidence state equals (07 §7.3) |
 | `raw` | string glob | the part's raw text matches; ask/deny only — MUST be rejected on allow |
 
@@ -156,36 +163,54 @@ coverage failure (08 §8.3). The following are REQUIRED of every allow rule:
   coverage comes exclusively from the effective redirect policy (§6.8).
 - An explicit `arguments` policy: `exact`, or `prefix` plus an explicit `remainder` —
   `{"none": true}` (no further arguments) or `{"each": tokenSelector}` (every remaining
-  positional token is one of the listed literals or a resolvable path within an absolute
-  lexical root). `containsAny` has no allow spelling.
+  positional token satisfies one string-value or lexical-path selector). `containsAny` has no
+  allow spelling. `prefix` without `remainder` and `exact` with `remainder` are invalid.
 - An explicit `options` policy: `{"none": true}`, or `{"allowed": [entry, ...]}`. Each entry
   references a declared canonical profile option and states `required` and `repeatable`;
   `required: true` + `repeatable: false` means exactly one occurrence. Every observed
   occurrence satisfies one entry by canonical ID; every consumed or inline value satisfies the
-  entry's `values` selector — `{"each": [literal, ...]}` (REQUIRED for a positive-arity entry:
-  every consumed value is one of the listed literals), or `{"none": true}` when none exist;
-  a zero-arity entry MUST NOT carry a `values` selector. Unknown or unlisted options prevent
-  the allow.
+  entry's `values` selector. `{"each": tokenSelector}` applies one selector to every value of
+  every occurrence. `{"byPosition": [tokenSelector, ...]}` has exactly the declared arity's
+  number of entries and applies its zero-based array entries to one-based value ordinals. A
+  positive-arity entry MUST carry `values`; a zero-arity entry MUST NOT. Canonical option IDs
+  MUST be unique within `allowed`. Unknown or unlisted options prevent the allow.
 - An explicit `environment` policy: `{"none": true}` or `{"all": [entry, ...]}` — every
-  assignment occurrence is covered by name, exact literal value, and prefix position.
+  assignment occurrence is covered by an `EnvironmentPolicy` with required `name`, `prefix`,
+  and `occurrence`, plus an optional complete-literal string-value selector.
 - An effective redirect policy (§6.8) covers every redirect occurrence structurally — source
   FD (including the explicit `"default"` selector), operator, occurrence, and target kind —
   and every literal redirect target path through the bundle's redirect-coordinate path entries.
 - An explicit non-redirect `paths` policy: `{"none": true}` or `{"all": [entry, ...]}` over
   the coordinates produced by `pathSources` or the analyzer's fact catalog — never over
-  redirect coordinates. `exact` is literal equality on the recorded path text;
+  redirect coordinates. `exact` compares the complete normalized lexical path;
   `within`/`outside` are lexical component comparisons on cwd-joined, dot-dot-normalized
   paths (`/work/repo2` is NOT within `/work/repo`, 07 §7.6).
 - An explicit `facts` policy: `{"none": true}` or `{"all": [entry, ...]}` — every emitted fact
-  is covered by analyzer ID, fact name, and exact value. Facts are produced only by a declared
-  analyzer; names are closed catalog references.
+  is covered by required analyzer ID, analyzer version, fact name, occurrence, and a typed-value
+  selector. Typed values use exactly one of `any`, scalar `exact`, `string`, bounded `integer`,
+  bounded `number`, exact `boolean`, or lexical `path`; no type coercion occurs.
 - An explicit `nestedParts` policy: `{"none": true}` or `{"all": [entry, ...]}` — every nested
-  executable part is covered by relation, occurrence, profile, evidence state, and required
-  reduced verdict.
+  executable part is covered by required `relation`, `occurrence`, `profile`, `classification`,
+  and reduced `verdict`.
 
 A partial match, a first-or-last-only match, or an unselected repeated occurrence does not
 qualify an allow. An allow rule MAY carry a `redirectPolicy` override; it is invalid on ask
 and deny.
+
+Path coordinates are one-level, single-key selectors. Non-redirect policies and `pathSources`
+use exactly one of:
+
+- `{ "argument": { "index": nonNegativeInteger, "remainder"?: boolean } }`;
+- `{ "optionValue": { "option": canonicalId, "occurrence"?: occurrenceSelector,
+  "valueOrdinal": integer1Through4 } }`;
+- `{ "environment": { "occurrence"?: occurrenceSelector } }`;
+- `{ "analyzerFact": { "analyzer": analyzerId, "version": string, "name": factName,
+  "occurrence"?: occurrenceSelector } }`.
+
+Redirect-policy paths instead use exactly
+`{ "redirect": { "operator": redirectOperator, "sourceFd": fdSelector,
+"occurrence"?: occurrenceSelector } }`. An allow `match.paths` and a profile `pathSources`
+MUST NOT use that redirect arm.
 
 ## 6.8 Reusable redirect policies
 
@@ -197,8 +222,8 @@ cannot be expressed. Redirect-entry operators are the closed catalog `<`, `>`, `
 `<&`; input/truncate/append entries carry `literalPath` targets and duplication entries carry
 `fd` targets (07 §7.5). Bundle path entries MUST select redirect coordinates.
 
-- `defaults.redirectPolicy` names the policy initially effective for every profile and allow
-  rule (§6.2); it is REQUIRED when any allow rule exists.
+- `defaults.redirectPolicy` is REQUIRED and names the policy initially effective for every
+  profile and allow rule (§6.2).
 - A profile or allow rule MAY set `redirectPolicy` to an override:
 
 | Mode | Result |
@@ -221,8 +246,9 @@ cannot be expressed. Redirect-entry operators are the closed catalog `<`, `>`, `
 
 ## 6.9 Semantic validation (closed catalogs, fail-closed)
 
-JSON Schema rejects unknown keys and wrong shapes; semantic validation proves the
-relationships JSON Schema cannot:
+The draft-2020-12 JSON Schema rejects unknown keys, wrong types, local union/composition
+shapes, selector cardinality violations, and action-sensitive rule shapes. Semantic validation
+proves relationships JSON Schema cannot express across declarations:
 
 - `version` MUST be `2`; `defaults.action` MUST be `"ask"`; `defaults.message` and rule
   `message` MUST be ≤ 512 chars; profile/rule/hint ids MUST be 1–128 chars; profile and rule
@@ -232,18 +258,22 @@ relationships JSON Schema cannot:
 - Cross-profile closure: every `executables` alias MUST belong to exactly one profile;
   multi-spelling lists MUST equal one lexical alias catalog entry.
 - Options: canonical ids 1–64 chars, arity 0–4, aliases 1–16 per option (each 1–32 chars) and
-  unique inside the profile; canonical ids of a `sed-v1` profile MUST be in the analyzer
+  unique inside the profile; analyzer/profile combinations MUST occur in the versioned
   compatibility table.
 - `pathSources` MUST carry at least one selector dimension per entry, MUST NOT select redirect
   coordinates, and MUST be within 64 entries.
-- Overrides and the default reference MUST resolve against `redirectPolicies` (the implicit
-  `no-redirects` bundle is valid only as `defaults.redirectPolicy`); `inherit` MUST carry no
-  additions; `extend`/`replace` MUST carry at least one; inline bundles MUST validate as
+- Overrides and the default reference MUST resolve against `redirectPolicies`; `inherit` MUST
+  carry no additions; `extend`/`replace` MUST carry at least one; inline bundles MUST validate as
   bundles; redirect entries MUST pair operator and target kind; redirect-policy path entries
   MUST select redirect coordinates; path policies select exactly one of
-  `exact`/`within`/`outside` with absolute `within`/`outside` roots.
-- Allow rules MUST satisfy §6.7 exactly (the shape list is enforced point by point);
-  ask/deny rules MUST satisfy the ordinary-shape exclusions of §6.6; rule-level
+  `exact`/`within`/`outside` with normalized absolute lexical paths.
+- Allow rules MUST satisfy §6.7 exactly. The schema requires every allow dimension and rejects
+  ordinary-only fields; semantic validation checks a coverage entry against the referenced
+  option's arity, rejects differing entries for the same canonical option ID, and resolves all
+  catalog and profile references.
+- Regex patterns MUST compile under the bounded `re2-v1` dialect and meet the UTF-8 byte cap;
+  typed bounds MUST have `min <= max`; no selector performs type coercion.
+- Ask/deny rules MUST satisfy the ordinary-shape exclusions of §6.6; rule-level
   `redirectPolicy` overrides are allow-only.
 - Fact references MUST exist in the closed fact catalog of the profile's declared analyzer;
   `nestedParts.profile` MUST name a declared profile id.
@@ -266,94 +296,33 @@ failure behavior (exit 2, no stdout; 02 §2.4) rather than widening a verdict.
 Every shipped example config MUST be covered by the golden suite (10 §10.2); every rule in it
 MUST have at least one positive and one negative case.
 
-## 6.12 Worked example
+## 6.12 Contract examples
 
-The shipped example `examples/configs/shell-warden.example.jsonc` (also mirrored in the
-accepted design draft) exercises exact positional shape, complete allow coverage, inherited /
-extended / replaced redirect coverage, an option-value allow, and cross-profile isolation:
+The complete minimal configuration fixture is
+`schemas/fixtures/shell-warden.config.v2/valid/Config/minimal.json`. Definition-scoped fixtures
+under the same tree exercise every selector arm without pretending that fragments are complete
+configurations. The following positive-arity option declaration is one `options` map value:
 
-```jsonc
+```json
+{ "aliases": ["--rename"], "arity": 2, "inline": false }
+```
+
+Its corresponding `options.allowed` entry is:
+
+```json
 {
-  "version": 2,
-  "defaults": { "action": "ask", "message": "No approved command profile matched.",
-                "redirectPolicy": "safe-local-io" },
-  "redirectPolicies": {
-    "safe-local-io": {
-      "redirects": { "all": [ { "sourceFd": "default", "operator": ">", "occurrence": "all",
-                                "target": { "kind": "literalPath" } } ] },
-      "paths": { "all": [ { "coordinate": { "redirect": { "operator": ">", "sourceFd": "default",
-                                                            "occurrence": "all" } },
-                            "within": "/tmp/reports" } ] }
-    }
-  },
-  "profiles": [ { "id": "git", "executables": ["git"],
-      "options": { "force": { "aliases": ["--force", "-f"], "arity": 0 },
-                   "dryRun": { "aliases": ["--dry-run", "-n"], "arity": 0 },
-                   "oneline": { "aliases": ["--oneline"], "arity": 0 } },
-      "analyzer": "generic-v1",
-      "rules": [
-        { "id": "git/deny-force-push", "action": "deny",
-          "message": "Push without force, or create a branch and open a pull request.",
-          "match": { "arguments": { "prefix": ["push"] }, "options": { "presentAny": ["force"] } } },
-        { "id": "git/allow-status", "action": "allow",
-          "match": { "classification": "complete", "arguments": { "exact": ["status"] },
-                     "options": { "none": true }, "environment": { "none": true },
-                     "paths": { "none": true }, "facts": { "none": true },
-                     "nestedParts": { "none": true } } },
-        { "id": "git/allow-status-append-report", "action": "allow",
-          "redirectPolicy": { "mode": "extend", "inline": { /* ">>" under /var/tmp/git-reports */ } },
-          "match": { "classification": "complete", "arguments": { "exact": ["status"] },
-                     "options": { "none": true }, "environment": { "none": true },
-                     "paths": { "none": true }, "facts": { "none": true },
-                     "nestedParts": { "none": true } } },
-        { "id": "git/allow-log-oneline", "action": "allow",
-          "redirectPolicy": { "mode": "replace", "policies": ["no-redirects"] },
-          "match": { "classification": "complete", "arguments": { "exact": ["log"] },
-                     "options": { "allowed": [ { "option": "oneline", "required": true,
-                                                  "repeatable": false } ] },
-                     "environment": { "none": true }, "paths": { "none": true },
-                     "facts": { "none": true }, "nestedParts": { "none": true } } }
-      ] },
-    { "id": "node-version", "executables": ["node"],
-      "options": { "version": { "aliases": ["--version", "-V"], "arity": 0 } },
-      "rules": [ { "id": "node-version/allow-bare-version", "action": "allow",
-                   "match": { "classification": "complete", "arguments": { "exact": [] },
-                              "options": { "allowed": [ { "option": "version", "required": true,
-                                                          "repeatable": false } ] },
-                              "environment": { "none": true }, "paths": { "none": true },
-                              "facts": { "none": true }, "nestedParts": { "none": true } } } ] }
-  ]
+  "option": "rename",
+  "required": false,
+  "repeatable": true,
+  "values": {
+    "byPosition": [
+      { "regex": "[a-z][a-z0-9_-]*" },
+      { "path": { "within": "/work/project" } }
+    ]
+  }
 }
 ```
 
-## Superseded v1 grammar (historical, non-normative — retained for the v1→v2 migration reference)
-
-The v1 rules grammar (config schema `schemas/shell-warden.config.v1.schema.json`) was a flat
-stage model derived from ADR-0016. It is retired and is NOT accepted by a v2 checker; its
-shape was:
-
-- Top level: `version: 1`, `defaults { action, message }`, `limits { configBytes, stages,
-  rules }`, and `stages[]` — a **stage** was a family scope with an `id`, a `scope.anyOf`
-  condition group (a `scope.argv` token sequence or a `scope.pattern` raw glob), a `flags`
-  arity table (flag name → 0–4), and `rules[]`.
-- A rule carried a closed condition set — `argv` (token sequence with `{anyOf}`), `argValue`
-  (positional globs), `pattern` (raw glob), `classification` (`static` | `opaque`), `flag`
-  (`present`/`absent` map), `flagValue` (glob per flag) — plus `action` and `message`.
-- Rules and scope conditions operated on the **stage tail**: the tokens remaining after the
-  matched scope anchor and after flag tokens with their consumed arity values were removed.
-- Verdict semantics: only stages whose scope matched were consulted; all matching rules voted;
-  the first deny was final; a matched rule strictly refined by another matched rule was
-  discarded ("precise over broad") before the most-restrictive reduction, so a narrow allow
-  survived the broad allow it refined; an allow required the command to be fully parsed by
-  that stage (unknown flags blocked allow only for the stage's own grammar, shared across a
-  multi-binary stage).
-
-The v2 profile grammar removed exactly those constructs (docs#15): shared stage scopes and
-flag tables became per-executable profiles with declared options; scope anchoring and stage
-tails became anchored positional matching on the part after the executable head; rule
-refinement, first-only deny, and priorities became the fixed `allow < ask < deny` lattice with
-every matching rule voting; flag-value and raw-pattern allows became typed-evidence coverage
-proofs; and v1 `argv`/`argValue`/`flag`/`flagValue`/`pattern`/`classification` condition
-operators were replaced by the closed `Match` dimensions of §6.6–§6.7. A user-config migration
-guide can map intended v1 policies into profiles, named redirect policies, and coverage-aware
-allow matchers; the checker itself offers no translation.
+These are schema-position fragments, not complete configurations. The complete fixture uses the
+same shapes in their documented positions. Nested implementation-enum wrappers,
+`values: { "none": ... }`, and `values.each` arrays are invalid v2 input.

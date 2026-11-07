@@ -1,0 +1,9 @@
+[
+  { "any": true },
+  { "exact": "inPlace" },
+  { "string": { "oneOf": ["safe", "readOnly"] } },
+  { "integer": { "min": 1, "max": 9 } },
+  { "number": { "min": 0.0 } },
+  { "boolean": true },
+  { "path": { "within": "/work/project" } }
+]

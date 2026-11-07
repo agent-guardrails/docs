@@ -1,0 +1,14 @@
+[
+  { "none": true },
+  {
+    "allowed": [
+      { "option": "verbose", "required": false, "repeatable": false },
+      {
+        "option": "file",
+        "required": false,
+        "repeatable": true,
+        "values": { "each": { "path": { "within": "/work/project" } } }
+      }
+    ]
+  }
+]

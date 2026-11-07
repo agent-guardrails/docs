@@ -1,0 +1,54 @@
+{
+  "classification": "complete",
+  "arguments": {
+    "prefix": ["read"],
+    "remainder": { "each": { "path": { "within": "/work/project" } } }
+  },
+  "options": {
+    "allowed": [
+      {
+        "option": "file",
+        "required": false,
+        "repeatable": true,
+        "values": { "each": { "path": { "within": "/work/project" } } }
+      }
+    ]
+  },
+  "environment": {
+    "all": [
+      {
+        "name": "LANG",
+        "value": { "oneOf": ["C"] },
+        "prefix": true,
+        "occurrence": "all"
+      }
+    ]
+  },
+  "paths": {
+    "all": [
+      { "coordinate": { "argument": { "index": 1 } }, "within": "/work/project" }
+    ]
+  },
+  "facts": {
+    "all": [
+      {
+        "analyzer": "sed-v1",
+        "version": "1",
+        "name": "executionPrimitive",
+        "occurrence": "all",
+        "value": { "exact": "readOnly" }
+      }
+    ]
+  },
+  "nestedParts": {
+    "all": [
+      {
+        "relation": "analyzer-command",
+        "occurrence": 1,
+        "profile": "rm-safe",
+        "classification": "complete",
+        "verdict": "ask"
+      }
+    ]
+  }
+}

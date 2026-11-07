@@ -1,19 +1,20 @@
 # 10 — Testing Strategy
 
-Version 2.1 · 2026-11-04 · Revised for checker configuration v2 (command profiles) per
-[docs#15](https://github.com/agent-guardrails/docs/issues/15): golden coverage of the checker
-(letter → verdict), profile-driven scenario and property tests, and the hook contract against
-a scripted mock binary.
+Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
+[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md): draft-2020-12 schema
+fixtures, golden checker coverage, profile-driven scenario/property tests, and the hook contract
+against a scripted mock binary.
 
 ## 10.1 Suites
 
 | Suite | What | Where | Needs OpenCode |
 |---|---|---|---|
-| Unit (checker) | analyzer fact catalogs (`analyzers`: sed-v1 in-place/program-form, export-v1 assignment, generic-xargs emptiness), letter parse/validation (`letter`), wire shapes and classification mapping (`verdict`), glob + lexical path comparison (`matcher`) | `src/checker/{analyzers,letter,verdict,matcher}.rs` | no |
+| Unit (checker) | analyzer fact catalogs (`analyzers`: `sed-v1` program forms, `export-v1` assignments, `xargs-v1` nested-command extraction), letter parse/validation (`letter`), wire shapes and classification mapping (`verdict`), regex + lexical path comparison (`matcher`) | `src/checker/{analyzers,letter,verdict,matcher}.rs` | no |
 | Pipeline scenario matrix | `pipeline_tests`: the full evaluate() path per `06`/`07`/`08` — profile grammar, coverage proofs, redirect resolution (inherit/extend/replace), evidence states, wrapper/substitution/`xargs-v1` nesting, and the design's evaluation-scenario rows; the sed and xargs rows are scenario TEMPLATES whose surrounding profiles and rules are part of the test config (`tests/fixtures/sketch.jsonc` patterns) | `tests/pipeline_tests.rs` | no |
 | Property invariants | reorder-invariance (`reorder_rules_options_policies_keeps_verdicts`) and monotonicity (`added_allow_cannot_lower_ask`) — 08 §8.6 MUSTs | `tests/pipeline_tests.rs` | no |
 | Golden (checker CLI) | letter JSON in → verdict JSON out through the `shell-warden` binary, diffed against `expect` for every case | `tests/golden.rs` + `tests/golden/cases/*.json` | no |
-| Config validation | valid/invalid config fixtures; strict rejection of unknown fields/caps/unresolved references (06 §6.9) | `tests/` (via `load_str`) | no |
+| Config schema | definition-scoped valid/invalid JSON fixtures; AJV 8.17.1 draft-2020-12 validation with strict types and coercion disabled | `schemas/fixtures/shell-warden.config.v2/` | no |
+| Config semantic validation | cross-reference, catalog, option-arity/value-policy, duplicate canonical-ID, regex compilation, and cap checks that JSON Schema cannot express (06 §6.9) | `tests/` (via `load_str`) | no |
 | Contract (hook) | hook vs a **mock checker** (scripted binary): spawn success/fail, timeout kill + grace, garbage/oversize/empty stdout, non-zero exits (incl. 2), schema-violating verdict, wrong `invocationId` echo, concurrency cap, tighten-only proof, cache TTL, deny budget | `tests/contract` (hook repo) | no |
 | Integration | real OpenCode: allowlist scenario, deny with visible reason in native prompt, `onCheckerError: "deny"` drill (non-spawnable checker path), project-config-ignored warning | `tests/integration` (manual/CI with `opencode run`) | yes |
 
@@ -50,7 +51,7 @@ negative case. Spawn latency is recorded per case (§10.6).
 | `git status > /tmp/other/x` vs a redirect policy rooted at `/tmp/reports` | `ask` (`redirect-policy-uncovered`) — a weaker non-redirect `paths` change never loosens it |
 | `GIT_DIR=/tmp/x git status` vs `environment: { "none": true }` | `ask` (`allow-coverage-missing`) |
 | `sed -i 's/a/b/' file` against a `sed-v1` profile whose rule denies fact `executionPrimitive: inPlace` | `deny` (analyzer emits the fact; the RULE emits the deny) |
-| `xargs rm -rf /` with `xargs-v1` and a nested `rm` profile denying exact `["/"]` + its recursive-force option | `deny` via the `analyzerCommand` nested part joining the lattice |
+| `xargs rm -rf /` with `xargs-v1` and a nested `rm` profile denying exact `["/"]` + its recursive-force option | `deny` via the `analyzer-command` nested part joining the lattice |
 | `git status; git push --force` (chain in one raw) | split into parts; the `rm`-like deny part dominates the aggregate; parts recorded in `facts` diagnostics |
 | `bash -c 'git push --force'` on twinned git rules | wrapper unwrapped (07 §7.2); same verdicts as the direct command |
 | reorder profiles, rules, options, hints, or policy entries | verdicts unchanged (reorder-invariance property test, 08 §8.6) |
@@ -61,6 +62,45 @@ negative case. Spawn latency is recorded per case (§10.6).
 | hook receives two JSON values on stdout | degrade |
 | deny budget: 4th deny of the same rule | hook silent; request to human (ADR-0010) |
 | stale allow after rules tightening | uncached next check sees new rules; cached allow bounded by TTL — I9 |
+
+### 10.3.1 Schema definition and fixture matrix
+
+Each fixture file lives under `valid/<Definition>/` or `invalid/<Definition>/`; the directory
+name selects the schema `$defs` entry. Array-valued fixture files contain one case per union arm
+and the fixture runner validates every element independently. `Config` selects the root schema.
+
+| Engine type / contract concern | Schema definition | Fixture family |
+|---|---|---|
+| argument predicates | `ArgumentsMatcher` | `ArgumentsMatcher` |
+| positional remainder policy | `RemainderPolicy` | `RemainderPolicy` |
+| string/path token selectors | `TokenSelector` | `TokenSelector` |
+| lexical path selector arms, including `exact` | `PathSelector` | `PathSelector` |
+| ordinary option predicates | `OptionsMatcher` | `OptionsMatcher` |
+| zero-arity option coverage | `OptionCoverage` | `OptionCoverage` |
+| positive-arity option coverage | `PositiveArityOptionCoverage` | `PositiveArityOptionCoverage` |
+| replacement for old `ValuesCoverage` | `OptionValueCoverage` | `OptionValueCoverage` |
+| complete allow option policy | `OptionsCoverage` | `OptionsCoverage` |
+| redirect structure and target paths | `RedirectPolicy`, `RedirectPolicyOverride` | `RedirectPolicy`, `RedirectPolicyOverride` |
+| ordinary redirect predicates (`any`, `all`) | `RedirectMatcher` | `RedirectMatcher` |
+| lexical path coordinates and policies | `PathCoordinateSelector`, `PathPolicy` | `PathCoordinateSelector` |
+| ordinary lexical-path predicates (`any`) | `PathsMatcher` | `PathsMatcher` |
+| positional path coordinates | `PositionalCoordinate` | `PositionalCoordinate` |
+| ordinary environment predicates (`any`) | `EnvironmentMatcher` | `EnvironmentMatcher` |
+| environment occurrence coverage | `EnvironmentPolicy` | `EnvironmentPolicy` |
+| ordinary typed fact predicates (`any`) | `FactsMatcher` | `FactsMatcher` |
+| typed analyzer-fact coverage | `FactPolicy`, `TypedValueSelector` | `FactPolicy`, `TypedValueSelector` |
+| ordinary nested-part predicates (`any`) | `NestedPartsMatcher` | `NestedPartsMatcher` |
+| nested executable-part coverage | `NestedPartPolicy` | `NestedPartPolicy` |
+| ask/deny rule composition | `Rule` | `Rule` |
+| fail-closed allow composition | `AllowMatch` | `AllowMatch` |
+| complete configuration | `Config` | `Config` |
+
+Named invalid fixtures MUST cover nested Serde-like unions, unknown keys, missing
+positive-arity value policy, out-of-range `byPosition` length, inline arity above one, duplicate
+canonical option policies, unsupported regex syntax, type coercion attempts, multi-arm unions,
+bad redirect override composition, incomplete coordinates/policies, and fail-open omissions.
+The pinned validator MUST instantiate `ajv/dist/2020` from `ajv@8.17.1` with
+`coerceTypes: false`; running a draft-07 validator or enabling coercion is not equivalent.
 
 ## 10.4 Contract harness requirements
 

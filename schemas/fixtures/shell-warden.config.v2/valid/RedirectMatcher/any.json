@@ -1,0 +1,10 @@
+{
+  "any": [
+    {
+      "operator": ">",
+      "sourceFd": "default",
+      "targetKind": "literalPath",
+      "occurrence": "all"
+    }
+  ]
+}

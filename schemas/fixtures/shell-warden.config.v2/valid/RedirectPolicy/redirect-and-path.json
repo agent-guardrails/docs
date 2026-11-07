@@ -1,0 +1,32 @@
+{
+  "redirects": {
+    "all": [
+      {
+        "sourceFd": "default",
+        "operator": ">",
+        "occurrence": "all",
+        "target": { "kind": "literalPath" }
+      },
+      {
+        "sourceFd": 2,
+        "operator": ">&",
+        "occurrence": 1,
+        "target": { "kind": "fd" }
+      }
+    ]
+  },
+  "paths": {
+    "all": [
+      {
+        "coordinate": {
+          "redirect": {
+            "operator": ">",
+            "sourceFd": "default",
+            "occurrence": "all"
+          }
+        },
+        "within": "/tmp/reports"
+      }
+    ]
+  }
+}

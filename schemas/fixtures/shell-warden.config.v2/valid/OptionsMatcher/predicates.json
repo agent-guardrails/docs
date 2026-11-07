@@ -1,0 +1,8 @@
+{
+  "presentAll": ["dryRun"],
+  "presentAny": ["verbose", "quiet"],
+  "absentAll": ["force"],
+  "values": {
+    "format": { "oneOf": ["json", "yaml"] }
+  }
+}

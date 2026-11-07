@@ -1,0 +1,8 @@
+{
+  "classification": "complete",
+  "arguments": { "exact": [] },
+  "options": { "none": true },
+  "environment": { "none": true },
+  "paths": { "none": true },
+  "facts": { "none": true }
+}

@@ -1,0 +1,49 @@
+name: Shell Warden Config Drift
+
+on:
+  pull_request:
+    paths:
+      - "design/shell-warden-config-v2.md"
+      - "spec/shell-warden/**"
+      - "schemas/shell-warden.config.v2.schema.json"
+      - "schemas/shell-warden.config.v2.grammar.snapshot"
+      - "schemas/fixtures/shell-warden.config.v2/**"
+      - "scripts/**"
+      - ".github/workflows/shell-warden-config-drift.yml"
+  schedule:
+    - cron: "23 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Ajv
+        run: npm install --no-save --no-package-lock ajv@8.17.1
+      - name: Run drift guard tests
+        run: python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+      - name: Run fixture validator tests
+        run: node --test scripts/tests/test_validate_shell_warden_config_v2_fixtures.mjs
+      - name: Validate schema fixtures
+        run: node scripts/validate-shell-warden-config-v2-fixtures.mjs
+      - name: Verify committed fixture snapshot
+        run: >-
+          python3 scripts/check-shell-warden-config-v2-drift.py
+          --grammar-file scripts/tests/fixtures/grammar-target.rs
+          --snapshot schemas/shell-warden.config.v2.grammar.snapshot
+      - name: Compare shell-warden main
+        run: >-
+          python3 scripts/check-shell-warden-config-v2-drift.py
+          --remote-main
+          --snapshot schemas/shell-warden.config.v2.grammar.snapshot

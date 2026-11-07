@@ -1,0 +1,7 @@
+{
+  "relation": { "analyzer-command": true },
+  "occurrence": 1,
+  "profile": "rm-safe",
+  "classification": "complete",
+  "verdict": "ask"
+}

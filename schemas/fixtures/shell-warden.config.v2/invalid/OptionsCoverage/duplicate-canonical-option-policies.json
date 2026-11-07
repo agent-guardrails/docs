@@ -1,0 +1,6 @@
+{
+  "allowed": [
+    { "option": "verbose", "required": false, "repeatable": false },
+    { "option": "verbose", "required": false, "repeatable": false }
+  ]
+}

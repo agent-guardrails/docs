@@ -1,0 +1,12 @@
+{
+  "version": 2,
+  "defaults": { "action": "ask", "redirectPolicy": "no-redirects" },
+  "redirectPolicies": {
+    "no-redirects": {
+      "redirects": { "none": true },
+      "paths": { "none": true }
+    }
+  },
+  "profiles": [],
+  "legacyStages": []
+}

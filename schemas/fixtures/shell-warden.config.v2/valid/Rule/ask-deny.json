@@ -1,0 +1,14 @@
+[
+  {
+    "id": "git/ask-push",
+    "action": "ask",
+    "message": "Confirm the target branch before pushing.",
+    "match": { "arguments": { "prefix": ["push"] } }
+  },
+  {
+    "id": "git/deny-force-push",
+    "action": "deny",
+    "message": "Push without force, or create a branch and open a pull request.",
+    "match": { "options": { "presentAny": ["force"] } }
+  }
+]

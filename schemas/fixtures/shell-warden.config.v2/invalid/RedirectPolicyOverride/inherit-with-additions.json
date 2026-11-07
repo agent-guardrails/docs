@@ -1,0 +1,1 @@
+{ "mode": "inherit", "policies": ["safe-local-io"] }

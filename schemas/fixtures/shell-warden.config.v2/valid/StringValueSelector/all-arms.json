@@ -1,0 +1,5 @@
+[
+  { "any": true },
+  { "oneOf": ["safe", "readOnly"] },
+  { "regex": "[a-z]+" }
+]

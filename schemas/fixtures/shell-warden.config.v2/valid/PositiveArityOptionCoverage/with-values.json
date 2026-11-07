@@ -1,0 +1,6 @@
+{
+  "option": "file",
+  "required": false,
+  "repeatable": true,
+  "values": { "each": { "path": { "within": "/work/project" } } }
+}

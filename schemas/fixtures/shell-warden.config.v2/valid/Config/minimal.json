@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "defaults": {
+    "action": "ask",
+    "redirectPolicy": "no-redirects"
+  },
+  "redirectPolicies": {
+    "no-redirects": {
+      "redirects": { "none": true },
+      "paths": { "none": true }
+    }
+  },
+  "profiles": [
+    {
+      "id": "echo",
+      "executables": ["echo"],
+      "options": {},
+      "analyzer": "generic-v1",
+      "rules": [
+        {
+          "id": "echo/allow-empty",
+          "action": "allow",
+          "match": {
+            "classification": "complete",
+            "arguments": { "exact": [] },
+            "options": { "none": true },
+            "environment": { "none": true },
+            "paths": { "none": true },
+            "facts": { "none": true },
+            "nestedParts": { "none": true }
+          }
+        }
+      ]
+    }
+  ]
+}
