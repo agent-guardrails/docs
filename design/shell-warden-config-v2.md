@@ -118,6 +118,44 @@ wrong type, empty selector alternatives, duplicate members where uniqueness is
 required, and every cross-field violation defined below. No public input is
 accepted merely because an implementation DTO can deserialize it.
 
+### Engine grammar snapshot (structural drift guard)
+
+Every config-v2 declaration a checker implements sits in one contiguous region
+of its grammar source, wrapped by the marker comments
+`// shell-warden-config-v2-grammar: begin` and
+`// shell-warden-config-v2-grammar: end`. The contract repository normalizes
+that region (comments stripped, serde attributes retained, one token stream per
+`pub struct`/`pub enum`) and compares it, declaration by declaration, with
+`schemas/shell-warden.config.v2.grammar.snapshot`. The guard fails closed on a
+missing marker, a second marker pair, an unbalanced comment or string,
+malformed or duplicate declarations, missing or extra declarations, and any
+changed declaration. The same comparison runs remotely against
+`agent-guardrails/shell-warden@main`.
+
+The snapshot is a point-in-time manifest of the checker grammar, tier-checked
+against the paired implementation state. The approved implementation
+sequencing is:
+
+1. https://github.com/agent-guardrails/shell-warden/issues/34 aligns the
+   `RemainderPolicy`/`TokenSelector` wire forms to the one-level contract and
+   introduces the marker region
+   (https://github.com/agent-guardrails/shell-warden/pull/37, engine commit
+   `841478922499ad32f2d91f8101ca25f60eed5765`); after that merge the remote
+   check turns green against the interim grammar.
+2. https://github.com/agent-guardrails/shell-warden/issues/32 (fixed option
+   arity and option-value selectors) and
+   https://github.com/agent-guardrails/shell-warden/issues/35 (typed facts and
+   `sed-v1`) implement the remaining v2 arms this schema defines — including
+   the rich token selector (`any`/`oneOf`/`regex`/`path`), `EnvironmentTest`
+   occurrence, and typed `FactTest` fields. Each lands by regenerating the
+   snapshot from the engine marker region and re-running the guard against
+   both the local target and remote main.
+
+Until those tickets merge, the snapshot legitimately encodes the interim
+grammar; the schema and fixtures remain the sole normative v2 contract, and
+they, not the snapshot, decide acceptance of public input. The snapshot guards
+drift; it never rewrites protocol semantics.
+
 ## Parsing, parts, and evidence states
 
 The checker parses raw shell syntax before profile selection and does not trust a
