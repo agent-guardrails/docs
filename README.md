@@ -22,6 +22,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | Product | Spec | Schemas |
 |---|---|---|
 | `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](schemas/shell-warden.letter.v1.schema.json), [`schemas/shell-warden.verdict.v1.schema.json`](schemas/shell-warden.verdict.v1.schema.json), [`schemas/shell-warden.config.v2.schema.json`](schemas/shell-warden.config.v2.schema.json) |
+| `pr-review` (auditable pull request review workflow) | [`spec/pr-review/`](spec/pr-review/README.md) | [`schemas/pr-review-bundle.v1.schema.json`](schemas/pr-review-bundle.v1.schema.json), [`schemas/pr-review-findings.v1.schema.json`](schemas/pr-review-findings.v1.schema.json) |
 | `shell-legible` (readability gate, standalone binary) + `opencode-shell-legible-hook` (planned) | — | — |
 
 ## Decisions index
@@ -45,6 +46,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0015](adr/0015-engine-language-rust.md) | Decision component and reference tools in Rust | Accepted |
 | [0016](adr/0016-two-tier-enforcement.md) | Two-tier enforcement: thin hook → one-shot shell-warden decision binary (supersedes 0002/0005/0007/0008) | Accepted |
 | [0017](adr/0017-schema-first-shell-warden-config-contract.md) | Schema-first Shell Warden v2 configuration contract | Accepted |
+| [0018](adr/0018-script-based-auditable-pr-review-workflow.md) | Shared fixed script contracts for auditable PR review, with MCP deferred as an optional transport | Accepted |
 
 ## Conventions
 
