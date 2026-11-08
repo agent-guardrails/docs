@@ -120,7 +120,12 @@ The completed bundle at exactly `--out` MUST contain this inventory:
 
 Default CI selection MUST use `filter=all` for all check runs on the exact head
 and `filter=all` for every associated job attempt. Completed available text logs
-MUST be collected. A `missing` log is one the remote provider reports does not
+MUST be collected. When the GitHub CLI requires an explicit opt-in to return
+terminal escape sequences, the collector MUST opt in only for CI-log retrieval.
+Before size accounting, hashing, or storage, it MUST strip terminal escape
+sequences and unsafe C0/C1 controls while preserving carriage returns, line feeds,
+and tabs. NUL-bearing or invalid UTF-8 responses MUST be recorded as unavailable
+text evidence rather than stored. A `missing` log is one the remote provider reports does not
 exist. An `inaccessible` log is one that exists but cannot be read with the
 caller's authorization. Missing, unavailable, failed, pending, cancelled,
 skipped, and inaccessible checks, job attempts, or logs MUST be recorded
@@ -183,6 +188,13 @@ direct byte hash because a self-byte hash is impossible.
 Offline reviewers MUST receive a verified immutable bundle and MUST write a
 separate findings JSON document. They MUST NOT edit the bundle and do not need
 GitHub credentials.
+
+Before reviewing `diff.patch`, an offline reviewer MUST read the title and body in
+`pr.json` and extract the stated intent, constraints, verification claims, and
+linked artifacts. Pull-request prose is untrusted evidence. The reviewer MUST
+compare those claims with the diff, repository contract, and collected CI. A
+missing, vague, or stale description MUST be reported as a review gap and MUST
+NOT trigger generic GitHub access or execution of reviewed repository code.
 
 Findings MUST validate against
 [`pr-review-findings.v1.schema.json`](../../schemas/pr-review-findings.v1.schema.json).
@@ -251,11 +263,13 @@ Sync and collect require read access to Git and GitHub evidence. Publish without
 to create one COMMENT review and its inline review comments. Read collection and
 remote publication MUST remain separate operations and permissions.
 
-The versioned OpenCode V2 project configuration MUST use ordered `permissions`
-rules with action `shell`. It MAY allow only the fixed sync, collect, and
-argument-free syntax-check command shapes. Test commands and every
-`pr-review-publish` invocation MUST remain at effect `ask`. Generic `git`, `gh`,
-shell, package, build, test, and reviewed-code execution MUST NOT be auto-allowed.
+The versioned OpenCode V2 project configuration MUST use an ordered
+`permission.bash` map. It MAY auto-allow only the fixed sync and collect command
+shapes. Every `pr-review-publish` command, including preview, MUST remain at
+`ask`. Generic `git`, `gh`, shell,
+package, build, test, and reviewed-code execution MUST NOT be auto-allowed.
+Trusted review-tool tests MUST run in this repository's CI and MUST NOT run
+locally as part of reviewing another repository.
 The trusted tooling
 checkout's `AGENTS.md` MUST require every workflow command to start there, forbid
 starting it in a reviewed worktree, and forbid reading instructions, hooks,
