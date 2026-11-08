@@ -317,9 +317,13 @@ Reviewer flow:
 2. Collect one bundle at the explicit output path.
 3. Verify the bundle before distributing it to offline reviewers.
 4. Produce one schema-valid findings file tied to that bundle's reviewed head.
-5. Run publish without `--confirm` and inspect the exact review body and inline
-   comments.
+5. If GitHub publication is wanted, obtain explicit approval before running
+   publish without `--confirm`, then inspect the exact review body and inline comments.
 6. Rerun with `--confirm` only after accepting that preview.
+
+Steps 1 through 4 are the unattended review path. Every publisher invocation is
+outside that path and requires explicit approval because shell command matching
+cannot safely distinguish all quoted forms of a confirmation argument.
 
 ## `pr-review-publish`: COMMENT review only
 
@@ -364,11 +368,12 @@ malformed findings, hash mismatch, and atomic-write failure stop the relevant
 operation. The scripts do not retry by changing revision, branch, output path,
 finding, or mutation type. Interrupted collection leaves no completed bundle.
 
-The repository-local OpenCode V2 configuration appends ordered `shell` rules for
-the fixed sync, collect, preview, syntax, and fixture-test commands. Its final
-matching rule keeps every `publish --confirm` invocation at `ask`, regardless of
-earlier rules. It does not allow generic `git`, `gh`, shell, package, test, or
-build commands. The trusted tooling checkout's `AGENTS.md` requires invocation
+The repository-local OpenCode V2 configuration uses an ordered
+`permission.bash` map that asks by default and allows only the fixed sync and
+collect commands. Every publisher invocation, including read-only preview,
+remains at `ask`. It does not allow generic `git`, `gh`, shell, package, test, or
+build commands. Trusted tooling tests run in this repository's CI, not in a local
+PR-review session. The trusted tooling checkout's `AGENTS.md` requires invocation
 there, never from a reviewed worktree, and bars reviewed instructions, hooks,
 configuration, and executables from becoming authority. The trusted tooling
 checkout and fixed command contracts are the only workflow authority. The
@@ -405,16 +410,15 @@ The three launchers are the supported fixed CLI surface. Modules below
 `.github/scripts/pr-review/` are private. Tests use Node's built-in `node:test`
 runner, captured JSON/text fixtures, and fake subprocess or API boundaries.
 They do not execute a reviewed repository, tests, package scripts, or real
-GitHub writes. No workflow caller or rollout change is in scope.
+GitHub writes. A repository-local GitHub Actions workflow runs those trusted
+tooling tests. It does not check out or execute a reviewed target repository.
 
-Suitable later verification commands are:
+CI checks out the canonical `agent-guardrails/docs` schemas at `.review-docs` and
+runs:
 
 ```text
-node --check .github/scripts/pr-review-sync.mjs
-node --check .github/scripts/pr-review-collect.mjs
-node --check .github/scripts/pr-review-publish.mjs
 PR_REVIEW_REQUIRE_SCHEMAS=1 \
-PR_REVIEW_SCHEMA_DIR=/absolute/path/to/agent-guardrails/docs/schemas \
+PR_REVIEW_SCHEMA_DIR=.review-docs/schemas \
   node --test .github/scripts/test_pr_review_*.mjs
 ```
 
@@ -433,6 +437,11 @@ The implementation test suite explicitly covers:
   CI runs, and paginated CI job/log discovery.
 - Missing CI logs and explicit manifest evidence state; failed, pending,
   cancelled, skipped, and unavailable checks and jobs.
+- CI-log retrieval with explicit terminal-sequence opt-in only at the raw log
+  boundary, followed by escape/control sanitization before hashing and storage.
+- Review starts from the title and description in `pr.json`, treats their claims
+  as untrusted evidence, and compares intent and verification claims with the diff,
+  repository contract, and collected CI.
 - Fork PR source handling, exact-SHA fetch, and missing/unfetchable fork revision
   failure.
 - Output collision handling, atomic sibling staging, atomic rename, crash cleanup,
