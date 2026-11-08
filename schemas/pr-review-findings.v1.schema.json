@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/agent-guardrails/docs/main/schemas/pr-review-findings.v1.schema.json",
+  "title": "Auditable PR review findings v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "prNumber", "reviewedHeadSha", "overallVerdict", "findings"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": { "type": "string", "pattern": "^agent-guardrails/[^/\\\\\\u0000-\\u001F\\u007F]+$", "minLength": 17, "maxLength": 140 },
+    "prNumber": { "type": "integer", "minimum": 1 },
+    "reviewedHeadSha": { "$ref": "#/$defs/gitSha" },
+    "overallVerdict": { "enum": ["approve", "comment", "request-changes", "no-findings"] },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "gitSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{7,128}$"
+    },
+    "safeArtifactPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "safeRepositoryPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001F\\u007F])[^/]+(?:/[^/]+)*$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "evidenceReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/safeArtifactPath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["findingId", "defectClass", "severity", "title", "explanation", "evidenceReferences", "remediation", "blocking"],
+      "properties": {
+        "findingId": { "type": "string", "pattern": "^f-[0-9a-f]{64}$" },
+        "defectClass": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,95}$" },
+        "severity": { "enum": ["blocker", "major", "minor", "nit"] },
+        "title": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "explanation": { "type": "string", "minLength": 1, "maxLength": 20000 },
+        "filePath": { "$ref": "#/$defs/safeRepositoryPath" },
+        "line": { "type": "integer", "minimum": 1 },
+        "diffSide": { "enum": ["LEFT", "RIGHT"] },
+        "evidenceReferences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceReference" } },
+        "remediation": { "type": "string", "minLength": 1, "maxLength": 20000 },
+        "blocking": { "type": "boolean" }
+      },
+      "dependentRequired": {
+        "line": ["filePath", "diffSide"],
+        "diffSide": ["filePath", "line"]
+      }
+    }
+  },
+  "$comment": "The implementation rejects duplicate findingId values and verifies repository, PR, head SHA, artifact membership, and evidence hashes against the verified bundle as defined by spec/pr-review/README.md."
+}
