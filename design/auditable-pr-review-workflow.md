@@ -284,7 +284,7 @@ defectClass
 severity
 title
 explanation
-filePath
+filePath?
 line?
 diffSide?
 evidenceReferences
@@ -292,11 +292,11 @@ remediation
 blocking
 ```
 
-`severity` is `blocker`, `major`, `minor`, or `nit`. `overallVerdict` is the
-documented review conclusion, separate from publication behavior. `blocking` is
-a boolean. `filePath`, when present, is a safe changed-file path; `line` and
-`diffSide` are optional together for an inline comment and absent for a
-review-level finding. An inline location identifies a changed hunk: `RIGHT` is a
+`severity` is `blocker`, `major`, `minor`, or `nit`. `overallVerdict` is the documented
+review conclusion, separate from publication behavior. `blocking` is a boolean.
+A review-level finding has no location. A file-level finding has only `filePath`,
+which is a safe changed-file path. An inline finding has `filePath`, `line`, and
+`diffSide` together. An inline location identifies a changed hunk: `RIGHT` is a
 head-side line and `LEFT` a base-side line. Renamed and copied files use the path
 on that selected side. Deleted files use only `LEFT`; new files use only `RIGHT`.
 `evidenceReferences` name bundle artifacts and their verified hashes.
