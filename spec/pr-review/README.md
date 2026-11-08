@@ -194,8 +194,9 @@ MUST NOT select a publication event.
 
 Each finding requires `findingId`, `defectClass`, `severity`, `title`, `explanation`,
 `evidenceReferences`, `remediation`, and `blocking`. Severity is `blocker`,
-`major`, `minor`, or `nit`. A finding is review-level when it has no location.
-An inline finding MUST include all of `filePath`, positive `line`, and
+`major`, `minor`, or `nit`. A review-level finding MUST omit `filePath`, `line`,
+and `diffSide`. A file-level finding MUST include only `filePath`, which MUST be
+a changed-file path. An inline finding MUST include all of `filePath`, positive `line`, and
 `diffSide` of `LEFT` or `RIGHT`. Its location is stateful: `RIGHT` identifies a
 line in the head-side changed file, while `LEFT` identifies a line in the
 base-side changed file. The implementation MUST validate the tuple of file path,
@@ -210,8 +211,9 @@ that equal the verified artifact hashes.
 `defectClass` MUST match `^[a-z][a-z0-9-]{0,95}$` and identify the defect
 independently of its prose or severity. `findingId` MUST equal `f-` followed by
 the lowercase SHA-256 of canonical JSON containing repository, PR number,
-reviewed head SHA, `defectClass`, and the complete inline location or `null` for
-a review-level finding. It therefore matches `^f-[0-9a-f]{64}$` and remains
+reviewed head SHA, `defectClass`, and a location of `null` for a review-level
+finding, `{filePath}` for a file-level finding, or the complete inline location.
+It therefore matches `^f-[0-9a-f]{64}$` and remains
 unchanged when only title, explanation, remediation, severity, blocking, or
 evidence references change. Duplicate IDs MUST make the findings document
 invalid.

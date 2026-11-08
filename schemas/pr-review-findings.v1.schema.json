@@ -63,13 +63,10 @@
         "remediation": { "type": "string", "minLength": 1, "maxLength": 20000 },
         "blocking": { "type": "boolean" }
       },
-      "allOf": [
-        {
-          "if": { "required": ["filePath"] },
-          "then": { "required": ["line", "diffSide"] },
-          "else": { "not": { "anyOf": [{ "required": ["line"] }, { "required": ["diffSide"] }] } }
-        }
-      ]
+      "dependentRequired": {
+        "line": ["filePath", "diffSide"],
+        "diffSide": ["filePath", "line"]
+      }
     }
   },
   "$comment": "The implementation rejects duplicate findingId values and verifies repository, PR, head SHA, artifact membership, and evidence hashes against the verified bundle as defined by spec/pr-review/README.md."
