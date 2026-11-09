@@ -73,8 +73,8 @@ class DriftGuardTests(unittest.TestCase):
 
     def test_unbalanced_declaration_is_rejected(self) -> None:
         result = self.run_mutation(
-            "    Within(String),\n}",
-            "    Within(String),",
+            "    Path(PathSelector),\n}",
+            "    Path(PathSelector),",
         )
 
         self.assertNotEqual(0, result.returncode)
@@ -98,10 +98,10 @@ class DriftGuardTests(unittest.TestCase):
         self.assertIn("excludes_all", result.stderr)
 
     def test_changed_variant_reports_drift(self) -> None:
-        result = self.run_mutation("Within(String)", "Outside(String)")
+        result = self.run_mutation("Path(PathSelector)", "Outside(PathSelector)")
 
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("Within", result.stderr)
+        self.assertIn("Path", result.stderr)
         self.assertIn("Outside", result.stderr)
 
     def test_extra_declaration_reports_drift(self) -> None:

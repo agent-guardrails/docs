@@ -102,6 +102,20 @@ bad redirect override composition, incomplete coordinates/policies, and fail-ope
 The pinned validator MUST instantiate `ajv/dist/2020` from `ajv@8.17.1` with
 `coerceTypes: false`; running a draft-07 validator or enabling coercion is not equivalent.
 
+### 10.3.2 Release-binary embedding of definition-scoped fixtures
+
+The fixture matrix in section 10.3.1 validates public schema definitions. A fixture that is valid for its selected `$defs` entry is definition-valid. Definition validity does not by itself establish that the value can be embedded in a complete `Config` and evaluated by the release binary.
+
+The release conformance harness MUST process every fixture case through the real release `shell-warden` binary. Each probe MUST use a one-file temporary configuration containing the case under test and no unrelated configuration state. The harness MUST fail loudly if the processed fixture count differs from 68 cases or if the behavioral-probe count differs from 19 probes. It MUST NOT skip a fixture because its selected definition has no compatible complete-config host.
+
+For a definition-valid case that can be embedded in a complete configuration, the binary MUST exit 0. An invalid fixture MUST be rejected before command evaluation and the binary MUST exit 2. Every known-valid adapter control MUST exit 0.
+
+The `TypedValueSelector` integer, number, boolean, and path cases are definition-valid but embedding-semantic-invalid. The shipped analyzer fact catalog has no compatible host for those selector types. The harness MUST embed and process each of those four cases, require exit 2, and require selector/catalog mismatch diagnostics. These are expected semantic rejections. They MUST NOT be counted as skipped fixtures, valid complete configurations, or product failures.
+
+All other expected outcomes remain fail-closed. Any unexpected exit code, missing selector/catalog diagnostic for one of the four specified cases, fixture-count drift, probe-count drift, or verdict mismatch MUST fail the release gate.
+
+This section clarifies [ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md). It does not introduce an architectural decision and does not change the schema or fixture semantics.
+
 ## 10.4 Contract harness requirements
 
 - Mock checker configurable per test: scripted verdicts, delays, garbage frames, exit codes, hang.
