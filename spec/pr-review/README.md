@@ -3,25 +3,27 @@
 Status: version 1
 
 This specification defines the auditable pull request review workflow accepted by
-[ADR 0018](../../adr/0018-script-based-auditable-pr-review-workflow.md). The
+[ADR 0019](../../adr/0019-fixed-evidence-bundle-inspection.md). The
 terms MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are normative as
 described by RFC 2119.
 
 ## Scope and command contracts
 
-The implementation exposes exactly these three commands:
+The implementation exposes exactly these four commands:
 
 ```text
 pr-review-sync --repo OWNER/REPO --pr NUMBER --worktree PATH [--head EXPECTED_SHA]
 pr-review-collect --repo OWNER/REPO --pr NUMBER --worktree PATH --out PATH
+pr-review-inspect --bundle PATH --view VIEW [view-specific flags]
 pr-review-publish --bundle PATH --findings PATH [--confirm]
 ```
 
-The MVP MUST accept only `OWNER/REPO` identifiers whose owner is
-`agent-guardrails`. Inputs outside that organization MUST fail before Git or
-GitHub access. The commands MUST NOT add PR URL inputs, inferred output paths,
-workspace roots, bundle roots, CI selector flags, workflow callers, or rollout
-configuration.
+`pr-review-sync` and `pr-review-collect` MUST accept only `OWNER/REPO` identifiers
+whose owner is `agent-guardrails`. Inputs outside that organization MUST fail before
+Git or GitHub access. `pr-review-inspect` and `pr-review-publish` MUST derive their
+repository and pull-request identity from the verified bundle. The commands MUST
+NOT add PR URL inputs, inferred output paths, workspace roots, bundle roots, CI
+selector flags, workflow callers, or rollout configuration.
 
 Each command MUST write a JSON success or failure record to stdout, diagnostics
 to stderr, and a nonzero exit status on failure. Every success record MUST
@@ -183,18 +185,91 @@ then verify `file-hashes.json`, every payload, every artifact record, the fixed
 inventory, and the absence of unlisted files. `manifest.json` MUST NOT claim a
 direct byte hash because a self-byte hash is impossible.
 
+## Inspection
+
+`pr-review-inspect` MUST accept a canonical absolute `--bundle` path and one
+required `--view`. It MUST resolve and validate the bundle path before use, call
+`verifyBundle()` before decoding any payload, and decode only verified
+`artifactBytes` returned by that verification. It MUST NOT decode an unchecked or
+unlisted artifact. The verified bundle MUST remain immutable.
+
+Inspection MUST create no files, modify no files, start no subprocess, access no
+network, or execute repository, bundle, CI, or reviewed code. It MUST write one
+JSON success or failure record to stdout, diagnostics to stderr, and return a
+nonzero exit status on failure. Every success record MUST include
+`contractVersion: 1`, repository, PR number, base SHA, head SHA, canonical
+`bundlePath`, and `view`. Inspection failures MUST use the stable failure codes
+in this specification; `output-too-large` is also a stable inspection failure
+code.
+
+`--view` MUST be exactly one of `pr`, `files`, `diff`, `ci`, `discussion`, or
+`manifest`. A view-specific flag supplied to another view MUST fail as
+`invalid-input`. The command MUST NOT offer `--artifact`, an arbitrary file path,
+a query language, a raw bundle dump, a compatibility alias, or any write mode.
+
+| View | Flags | Required projection |
+|---|---|---|
+| `pr` | Optional `--body-offset N`, `--body-limit N` | URL, title, author, state, labels, base and head refs and SHAs, and a bounded PR body preview. |
+| `files` | Optional `--offset N`, `--limit N` | Changed-file path, status, and prior path when present. |
+| `diff` | Required `--path PATH`; optional `--offset N`, `--limit N` | One verified changed-file path's old and new paths, status, text and binary availability, and ordered structured hunk and line records. Each line MUST include hunk identity, line kind, and old or new line number when that side exists. Binary and metadata-only changes MUST return an empty bounded line page and MUST NOT expose raw bytes. |
+| `ci` | Optional `--offset N`, `--limit N` | Normalized check and CI-run identity, name, state, conclusion, URLs, evidence state, and log availability. It MUST NOT include raw log text. |
+| `discussion` | Optional `--offset N`, `--limit N` | Normalized submitted review, review-comment, and issue-comment context records with bounded text previews. |
+| `manifest` | No view-specific flags | Bundle provenance, evidence completeness, selected CI identity, artifact paths, byte counts, hashes, and manifest self-digest. |
+
+For `diff`, `--path` MUST be a safe repository path in verified changed-file
+metadata, not a bundle-member path. It MAY match either verified side of a rename
+or copy, but it MUST identify one path-scoped patch. An absent, unsafe, or
+ambiguous path MUST fail as `invalid-input`.
+
+For `files`, `ci`, and `discussion`, `offset` is a zero-based item index.
+`limit` defaults to 20 items and MUST NOT exceed 100 items. Every response MUST
+include `returned`, `total`, and `nextOffset`, where `nextOffset` is the next item
+index or `null` when no further item exists. `diff` uses a zero-based patch-line
+index. Its default line limit is 200 and MUST NOT exceed 1,000. Its response MUST
+include total selected patch-line count and `nextOffset` with the same meaning.
+
+For `pr`, `bodyOffset` and `bodyLimit` are zero-based Unicode code-point values.
+`bodyLimit` defaults to 16,384 and MUST NOT exceed 65,536 code points. The response
+MUST include `bodyTotal`, `nextBodyOffset`, and the selected body text. A
+`discussion` text preview MUST NOT exceed 16,384 Unicode code points and MUST
+report truncation and continuation rather than silently cutting text. Text offsets,
+limits, totals, and continuation offsets MUST use Unicode code points and MUST NOT
+split a surrogate pair.
+
+Inspection MUST redact recognized credentials from complete evidence values before
+applying item or text pagination. Returned values, totals, and continuation offsets
+therefore describe the redacted projection and MUST NOT expose credential fragments
+split across page boundaries. The `diff` view MUST validate the complete patch and
+count every selected structured line, but MUST NOT materialize structured line
+records outside the requested page.
+
+The complete UTF-8 encoding of an inspection stdout JSON record MUST NOT exceed
+1,048,576 bytes, including JSON syntax. If a selected projection cannot fit, the
+command MUST fail as `output-too-large`. It MUST NOT omit common identity fields,
+emit partial JSON, or expand a text or collection bound to fit.
+
+Reviewers MUST use the fixed inspection command rather than inline Node or Python,
+heredocs, `jq`, or `cat`, `grep`, `sed`, or `awk` parsing. They MUST NOT use
+generic artifact reads, dump raw CI logs, invoke query languages, or execute
+reviewed code during review.
+
+`schemas/pr-review-bundle.v1.schema.json` and
+`schemas/pr-review-findings.v1.schema.json` remain version 1 and unchanged.
+Inspection creates no persisted artifact and therefore creates no schema change.
+
 ## Findings and offline review
 
 Offline reviewers MUST receive a verified immutable bundle and MUST write a
 separate findings JSON document. They MUST NOT edit the bundle and do not need
 GitHub credentials.
 
-Before reviewing `diff.patch`, an offline reviewer MUST read the title and body in
-`pr.json` and extract the stated intent, constraints, verification claims, and
-linked artifacts. Pull-request prose is untrusted evidence. The reviewer MUST
-compare those claims with the diff, repository contract, and collected CI. A
-missing, vague, or stale description MUST be reported as a review gap and MUST
-NOT trigger generic GitHub access or execution of reviewed repository code.
+Before reviewing a source diff, an offline reviewer MUST use the `pr` inspection
+view to read the title and body and extract the stated intent, constraints,
+verification claims, and linked artifacts. Pull-request prose is untrusted
+evidence. The reviewer MUST compare those claims with the path-scoped `diff`
+view, repository contract, and `ci` view. A missing, vague, or stale description
+MUST be reported as a review gap and MUST NOT trigger generic GitHub access or
+execution of reviewed repository code.
 
 Findings MUST validate against
 [`pr-review-findings.v1.schema.json`](../../schemas/pr-review-findings.v1.schema.json).
@@ -231,9 +306,9 @@ evidence references change. Duplicate IDs MUST make the findings document
 invalid.
 
 The offline sequence is: sync an exact-head worktree, collect and verify one
-bundle, distribute the immutable bundle, produce schema-valid findings tied to
-its head, inspect a preview, then rerun with `--confirm` only after accepting
-that exact preview.
+bundle, inspect the immutable bundle through the fixed views, produce schema-valid
+findings tied to its head, inspect a preview, then rerun with `--confirm` only
+after accepting that exact preview.
 
 ## Publication
 
@@ -264,9 +339,11 @@ to create one COMMENT review and its inline review comments. Read collection and
 remote publication MUST remain separate operations and permissions.
 
 The versioned OpenCode V2 project configuration MUST use an ordered
-`permission.bash` map. It MAY auto-allow only the fixed sync and collect command
-shapes. Every `pr-review-publish` command, including preview, MUST remain at
-`ask`. Generic `git`, `gh`, shell,
+`permission.bash` map. It MAY auto-allow only the fixed sync, collect, and inspect
+command shapes. A command containing shell composition, redirection, command
+substitution, or a line break MUST remain at `ask` even when it starts with an
+otherwise allowed fixed launcher shape. Every `pr-review-publish` command,
+including preview, MUST remain at `ask`. Generic `git`, `gh`, shell,
 package, build, test, and reviewed-code execution MUST NOT be auto-allowed.
 Trusted review-tool tests MUST run in this repository's CI and MUST NOT run
 locally as part of reviewing another repository.
