@@ -47,6 +47,8 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0016](adr/0016-two-tier-enforcement.md) | Two-tier enforcement: thin hook → one-shot shell-warden decision binary (supersedes 0002/0005/0007/0008) | Accepted |
 | [0017](adr/0017-schema-first-shell-warden-config-contract.md) | Schema-first Shell Warden v2 configuration contract | Accepted |
 | [0018](adr/0018-script-based-auditable-pr-review-workflow.md) | Shared fixed script contracts for auditable PR review, with MCP deferred as an optional transport | Accepted |
+| [0019](adr/0019-fixed-evidence-bundle-inspection.md) | Fixed evidence bundle inspection | Accepted |
+| [0020](adr/0020-versioned-shell-warden-verdict-envelope.md) | Versioned Shell Warden verdict envelope | Accepted |
 
 ## Conventions
 
