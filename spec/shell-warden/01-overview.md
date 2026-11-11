@@ -1,6 +1,8 @@
 # 01 — Overview
 
-Version 2.0 · 2026-11-01 · Revised per [ADR-0016](../../adr/0016-two-tier-enforcement.md) (two-tier enforcement)
+Version 2.1 · 2026-11-11 · Revised per [ADR-0016](https://github.com/agent-guardrails/docs/blob/main/adr/0016-two-tier-enforcement.md)
+and [ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md), superseding
+[ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md)
 
 ## 1. Summary
 
@@ -99,6 +101,7 @@ Decision flow for one shell tool call:
 | D4 | Fail-closed everywhere; `onCheckerError ∈ {ask, deny}` | ADR-0001 heritage; a checker anomaly can never widen access |
 | D5 | Checker + config from user-global scope only; project copies ignored with warning | ADR-0003; rules are executable policy |
 | D6 | Hook owns per-session state: deny budgets (ADR-0010), allow cache, debug log | ADR-0016; the binary is stateless, hook keeps no policy logic |
-| D7 | `allow` originates only from `static` classification; `opaque` degrades toward `ask` | ADR-0001/0016; defense against obfuscation (I10) |
+| D7 | `allow` originates only from `static` classification; `opaque` and `invalid` cannot allow | ADR-0001/0016; defense against obfuscation and malformed evidence (I10) |
 | D8 | Checker in Rust (ADR-0015); letter/verdict shapes stay harness-neutral | compiled-binary spawn is milliseconds against the guarded command |
 | D9 | Tighten-only application; the reply API never loosens an existing deny | ADR-0013; reducing to `ask` is not loosening — allow only on a checker `allow` |
+| D10 | Verdict v1 remains immutable; verdict v2 uses a distinct closed envelope and explicit `invalid` classification, with fail-closed post-schema validation | ADR-0021 supersedes ADR-0020; closed-enum compatibility and deterministic fail-closed rollout |
