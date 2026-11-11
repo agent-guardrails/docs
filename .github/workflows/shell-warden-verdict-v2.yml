@@ -12,7 +12,7 @@ on:
       - "spec/shell-warden/**"
       - "design/shell-warden-verdict-v2.md"
       - "adr/0020-versioned-shell-warden-verdict-envelope.md"
-      - "adr/0021-post-schema-shell-warden-verdict-validation.md"
+      - "adr/0022-post-schema-shell-warden-verdict-validation.md"
       - ".github/workflows/shell-warden-verdict-v2.yml"
   workflow_dispatch:
 

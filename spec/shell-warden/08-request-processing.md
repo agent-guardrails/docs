@@ -1,7 +1,7 @@
 # 08 — Decision Pipeline (checker) & Hook Application
 
 Version 2.3 · 2026-11-11 · Revised for verdict v2 per
-[ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md) and
+[ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) and
 [docs issue 31](https://github.com/agent-guardrails/docs/issues/31): rules vote inside the
 binary and reduce by the fixed lattice; there is no refinement phase, first-match semantics,
 configuration-order meaning, or compatibility grammar.

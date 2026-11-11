@@ -3,7 +3,7 @@
 Status: accepted design direction
 Ticket: https://github.com/agent-guardrails/docs/issues/31
 Primary hook work: https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/13
-Decision: [ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md), current decision; [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md) is superseded historical provenance.
+Decision: [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md), current decision; [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md) is superseded historical provenance.
 Normative contract: [spec/shell-warden/02-letter-verdict.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/02-letter-verdict.md)
 Schema: [schemas/shell-warden.verdict.v2.schema.json](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json)
 

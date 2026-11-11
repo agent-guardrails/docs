@@ -5,7 +5,7 @@ v2 target architecture per ADR-0016: **thin hook + one-shot decision binary**
 (`agent-guardrails/opencode-shell-warden-hook` + `shell-warden`)
 
 Verdict v2 is governed by the current decision,
-[ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md),
+[ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md),
 for [docs issue 31](https://github.com/agent-guardrails/docs/issues/31). [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md)
 is superseded historical provenance. Implementation and rollout remain pending; released verdict
 v1 remains immutable.
@@ -52,10 +52,10 @@ state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
   `shell-warden` repository. **Letter / verdict** = the request/response JSON of 02.
 - All durations are integer milliseconds. All budget clamps are enforced with warn+clamp, never silently.
 - Spec changes: bump the doc version and the relevant `version` field of the matching schema.
-- Revision status: 01 is v2.1 under ADR-0021. Document 06 is v2.3 and 07 is v2.3 under
+- Revision status: 01 is v2.1 under ADR-0022. Document 06 is v2.3 and 07 is v2.3 under
    [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and
-  [ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md),
+  [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md),
   [docs issue 21](https://github.com/agent-guardrails/docs/issues/21). Documents 02, 03, and
   08–11 are respectively v2.2, v2.1, and v2.3 as of 2026-11-11 for
-  [docs issue 31](https://github.com/agent-guardrails/docs/issues/31) and ADR-0021; 04 remains
+  [docs issue 31](https://github.com/agent-guardrails/docs/issues/31) and ADR-0022; 04 remains
   v2.0 under ADR-0016; 05 remains retired.

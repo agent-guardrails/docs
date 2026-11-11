@@ -2,7 +2,7 @@
 
 Version 2.3 · 2026-11-11 · Revised for the schema-first v2 contract accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and post-schema verdict
-validation in [ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md). Parsing remains the
+validation in [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md). Parsing remains the
 checker's own and complete; harness-supplied splitting is never trusted.
 
 Parsing is the checker's own (ADR-0016): one scanner turns raw command text into segments per

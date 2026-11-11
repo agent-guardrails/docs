@@ -4,7 +4,7 @@ References: [ADR-0016](https://github.com/agent-guardrails/docs/blob/main/adr/00
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) defines the public
 configuration contract. Specs 06–10 and `schemas/shell-warden.config.v2.schema.json` mirror the
 accepted design. The letter and released verdict v1 remain immutable; verdict v2 is the new
-checker output contract under the current decision, [ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md),
+checker output contract under the current decision, [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md),
 for [docs issue 31](https://github.com/agent-guardrails/docs/issues/31). [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md)
 is superseded historical provenance. See [`HANDOFF-verdict-v2.md`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/HANDOFF-verdict-v2.md)
 for the cross-repository delta.

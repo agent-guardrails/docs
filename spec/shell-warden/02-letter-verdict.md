@@ -2,7 +2,7 @@
 
 Version 2.2 · 2026-11-11 · Revised for verdict v2 per
 [docs issue 31](https://github.com/agent-guardrails/docs/issues/31) and
-[ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md), which supersedes
+[ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md), which supersedes
 [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md). The letter and released
 verdict v1 remain immutable; this revision adds the separate v2 response contract.
 

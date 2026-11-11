@@ -1,4 +1,4 @@
-# 0021, Post-schema Shell Warden verdict validation
+# 0022, Post-schema Shell Warden verdict validation
 
 * **Status:** Accepted (2026-11-11)
 * **Deciders:** preved911
