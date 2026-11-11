@@ -1,7 +1,9 @@
 # 11 — Roadmap & Open Questions
 
-Version 2.2 · 2026-11-06 · Configuration contract re-baselined per
-[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md)
+Version 2.3 · 2026-11-11 · Configuration contract re-baselined per
+[ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and verdict v2 per
+[ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md) and
+[docs issue 31](https://github.com/agent-guardrails/docs/issues/31)
 
 The retired v1.x milestones (persistent engine M0–M4, TS reference engine) are
 history: the M0 engine implementation exists in the `shell-warden` repository
@@ -50,3 +52,29 @@ as a retired reference. v2 rebuilds the system on two tiers.
 | Overloaded `message` becoming an injection channel | I11 — templates + allowlisted interpolation only; integration test asserts prompt content |
 | Config complexity snowball | one-level closed unions, fixed arity, strict draft-2020-12 schema, exhaustive fixture families, and semantic validation (06 §6.9, 10 §10.3.1) |
 | Parser under-splitting a construct (false `static`) | recursive splitter per construct with golden cases; default `ask` for anything unrecognized (I10); adversarial suite §10.3 |
+
+## 11.5 Verdict v2 rollout and release completion
+
+Publish compatible hook and checker releases together as one coordinated pair for
+[hook issue 13](https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/13).
+Deploy the dual-read hook first, then the v2-only checker. Roll back the checker
+first, returning it to v1 output while the deployed hook continues dual-read
+validation.
+
+| Checker | Hook | Required behavior |
+|---|---|---|
+| Old v0.4.0 | Old | Exact schema-valid v1 normal; internal invalid remains opaque on wire. |
+| Old v0.4.0 | New | Exact schema-valid v1 normal; opaque is not reinterpreted as invalid. |
+| New | Old | V2 fails closed through `onCheckerError` because legacy flat root fields are missing; operationally incompatible. |
+| New | New | V2 normal. |
+
+Migration MUST NOT be reported complete until docs/schema are merged, the hook is
+released and deployed, the checker is released and deployed, compatibility and
+rollback tests pass, and deployed checker v2 emission is verified. This contract
+change does not complete implementation or rollout.
+
+The hook repository implementation handoff MUST require revision-pinned shell-warden
+v0.4.0 `04cfe594b433d05343044bb848891d7942a4b87c` and hook v0.2.1
+`7090301963bed3fbe9d2a3f0babf413d521f75f4` harness tests with revision
+provenance for exact-valid-v1 preservation and v2-envelope rejection through
+`onCheckerError`. This repository makes no claim that those external tests ran.

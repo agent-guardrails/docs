@@ -1,7 +1,8 @@
 # 09 — Security: Trust Model, Invariants, Fail-Closed Matrix
 
-Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
-[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md).
+Version 2.3 · 2026-11-11 · Revised for verdict v2 per
+[ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md) and
+[docs issue 31](https://github.com/agent-guardrails/docs/issues/31).
 
 ## 9.1 Trust boundaries
 
@@ -22,10 +23,10 @@ Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted b
 | I1 | Checker spawn: `command[0]` absolute; no shell; child spawned with **empty environment**; options are argv only |
 | I2 | Checker location from user-global config only; bad/relative path ⇒ plugin disables itself |
 | I3 | Every anomaly (spawn failure, timeout, graceful-kill, non-zero exit, unreadable/garbage/oversize stdout, schema violation, untrusted split) resolves the invocation to `onCheckerError ∈ {ask, deny}` — never `allow` |
-| I4 | Letter/verdict limits enforced by the hook regardless of checker behavior: letter ≤ 64 KiB / ≤ `maxRequestCommands` commands before spawn; verdict ≤ 64 KiB; spawn concurrency ≤ `maxConcurrentSpawns` |
+| I4 | Letter/verdict limits enforced by the hook regardless of checker behavior: configured `maxRequestCommands` above 128 warns and clamps; a request above its effective limit or a letter above 64 KiB degrades before spawn; verdict ≤ 64 KiB before JSON parsing; spawn concurrency ≤ `maxConcurrentSpawns` |
 | I5 | The hook never loosens an existing deny; a reply allow applies only to a request whose checker verdict was allow; native denies are unreachable (hooks see only published asks) |
 | I6 | Payload caps everywhere: letter 64 KiB, verdict 64 KiB, facts 16 KiB / depth 8, messages ≤ 512, debug-log lines ≤ 16 KiB |
-| I7 | Letter and verdict schema exact conformance: `version` const, unknown fields, wrong types, wrong `invocationId` echo ⇒ degrade; both sides ship the schemas |
+| I7 | Letter and verdict schema exact conformance: the hook selects exact v1 only when protocol is absent and exact v2 only when protocol is `shell-warden.verdict.v2`; it then verifies the expected letter invocation ID, command count, positional indexes equal to array positions in letter and verdict, legal semantic tuples, required deny message, both diagnostics-shape coherence requirements, full static/argv/allow vote proof, rule-ID selection, and aggregate consistency. Unknown fields, wrong types, failed validation, or any invariant failure ⇒ degrade; both sides ship the schemas |
 | I8 | Optional sha256 pinning of the checker binary; mismatch ⇒ refuse to spawn |
 | I9 | Hook caches `allow` verdicts only, hook-configured TTL; denies never cached; uncached checks always see the current rules file (checker re-reads per spawn) |
 | I10 | Allow verdicts originate only from `complete` typed evidence AND a full coverage proof (06 §6.7, 07 §7.3, 08 §8.3); `opaque`/`invalid`/limit-bounded evidence and config-failure degrade toward `ask` |
@@ -35,6 +36,9 @@ Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted b
 | I14 | Order independence: profile selection, redirect-policy resolution, and vote reduction are order-free. Reordering or adding allow rules, options, hints, or policy entries MUST NOT lower any verdict, and no priority/refinement/first-match semantics exist (08 §8.6) |
 | I15 | Catalog closure without I/O: analyzers, fact names, redirect operators, target kinds, relations, option arities, and lexical-alias equivalence are held in closed, versioned implementation-owned tables and are machine-checkable from the config text alone — no filesystem, PATH, or network lookup participates in validation or allow coverage. Evidence production performs no I/O |
 | I16 | Public configuration is the draft-2020-12 schema shape, not a language-specific DTO layout. Every tagged selector has one discriminator and direct payload; nested Serde wrappers, unknown keys, type coercion, omitted allow dimensions, positive-arity entries without value coverage, and v1/legacy forms are invalid |
+| I17 | Invalid evidence MUST NOT automatically deny or allow. When no ordinary rule emits a vote, it MUST produce a bare ask without `ruleId`. Ordinary ask or deny rules MAY match retained typed evidence or raw text; an emitted ask uses the deterministic `ruleId`, and deny remains dominant. Opaque evidence MUST NOT allow. |
+| I18 | Failed v2 validation MUST NOT fall back to v1. The future dual-read hook applies the same post-schema invariants to exact-valid v1, so impossible v1 tuples such as opaque/argv/allow are anomalies. Unknown classifications or protocol values, missing classification or match, invalid/opaque/raw allow, arbitrary diagnostics, and inconsistent aggregate are anomalies. |
+| I19 | Recognized full and truncated diagnostics use their known key sets and stable 07 §7.3 reasons. Opaque evidence requires `opaque-expansion`, may include `complete` for mixed complete and opaque parts, and rejects invalid-cause reasons. Full diagnostics record emitted votes, not default asks. A full static/argv/allow command requires an emitted allow vote. A present `ruleId` is the UTF-8-byte-order smallest emitted vote matching the command verdict; a default ask with no emitted ask vote omits it. Any v1 facts object containing a reserved diagnostic key must be an exact valid full or truncated shape or fail closed. V1 facts disjoint from reserved keys remain legacy-opaque. Parser or library text is never exposed. |
 
 ## 9.3 Threat model (selected vectors)
 
@@ -62,12 +66,16 @@ Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted b
 | Checker spawn failure (ENOENT, permission) | `onCheckerError` + debug-log note | n/a |
 | Checker timeout | `onCheckerError` | SIGTERM → grace → SIGKILL |
 | Checker exit ≠ 0 (incl. config fatal, exit 2) | `onCheckerError`; stderr line logged | n/a (stateless — every re-check fails the same way until config fixed) |
-| Garbage / multiple / oversize stdout; schema violation; wrong `invocationId` echo | `onCheckerError` | n/a |
+| Garbage / multiple / oversize stdout; schema or post-schema semantic violation; wrong `invocationId` echo; missing, duplicate, or mismatched command index | `onCheckerError` | n/a |
 | Spawn concurrency exceeded | **local degrade before spawn** (no new process) | old spawns unaffected; each still deadline-bounded |
 | Hook option invalid (`checker.*`) | plugin disabled at load + warning | n/a |
 | Project checker/policy config | ignored with warning | n/a |
 | Plugin unload (`dispose`) | in-flight invocations abandoned → `onCheckerError` | SIGTERM → grace → SIGKILL |
 | Checker internal error, single command/part | that part degrades inside the verdict; aggregate still tight (most-restrictive holds) | exit 0 with a valid verdict |
+| Unknown, malformed, or non-string protocol; failed v2 validation | `onCheckerError`; no v1 fallback | n/a |
+| Invalid/opaque/raw allow; missing classification or match; unknown classification | `onCheckerError` | n/a |
+| Arbitrary, malformed known-shape, or classification-inconsistent diagnostics | `onCheckerError` | n/a |
+| Aggregate differs from most-restrictive command verdict | `onCheckerError` | n/a |
 
 No row of this table can produce `allow` — and no combination of rows can,
 because every degrade verdict is at most as permissive as `ask`, and `ask` is
