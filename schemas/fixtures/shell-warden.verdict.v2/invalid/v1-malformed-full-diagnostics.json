@@ -1,0 +1,21 @@
+{
+  "invocationId": "fixture:v1-malformed-full-diagnostics",
+  "verdict": "ask",
+  "commands": [
+    {
+      "index": 0,
+      "verdict": "ask",
+      "classification": "static",
+      "match": "argv",
+      "facts": {
+        "evidence": "complete",
+        "reasons": "complete",
+        "selectedProfiles": [],
+        "matched": [],
+        "qualified": [],
+        "rejected": [],
+        "votes": []
+      }
+    }
+  ]
+}
