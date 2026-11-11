@@ -1,7 +1,8 @@
 # 10 — Testing Strategy
 
-Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
-[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md): draft-2020-12 schema
+Version 2.3 · 2026-11-11 · Revised for verdict v2 per
+[ADR-0021](https://github.com/agent-guardrails/docs/blob/main/adr/0021-post-schema-shell-warden-verdict-validation.md) and
+[docs issue 31](https://github.com/agent-guardrails/docs/issues/31): draft-2020-12 schema
 fixtures, golden checker coverage, profile-driven scenario/property tests, and the hook contract
 against a scripted mock binary.
 
@@ -45,7 +46,8 @@ negative case. Spawn latency is recorded per case (§10.6).
 | Case | Expected |
 |---|---|
 | `echo $(whoami)` against an allow rule for `echo *` | `ask` — `opaque` evidence cannot allow (I10/I12) |
-| `git status --unknown-option` against a complete allow | `ask` — `invalid` evidence (unknown option) blocks allow but deny/ask still match (I12) |
+| `git status --unknown-option` with no matching ordinary rule | bare `ask` without `ruleId` — invalid evidence establishes the ask floor and blocks allow (I12) |
+| `git status --unknown-option` against a matching ordinary ask rule | `ask` with the deterministic emitted-ask `ruleId` — invalid evidence may match ordinary ask rules |
 | `git log --oneline --oneline` where the option entry is `repeatable: false` | `ask` (`option-not-repeatable`) |
 | `git log` where the option entry is `required: true` | `ask` (`required-option-missing`) |
 | `git status > /tmp/other/x` vs a redirect policy rooted at `/tmp/reports` | `ask` (`redirect-policy-uncovered`) — a weaker non-redirect `paths` change never loosens it |
@@ -57,8 +59,21 @@ negative case. Spawn latency is recorded per case (§10.6).
 | reorder profiles, rules, options, hints, or policy entries | verdicts unchanged (reorder-invariance property test, 08 §8.6) |
 | add a matching allow where an ask already emits | still `ask` — an added allow cannot lower the lattice result |
 | rules file with a non-`ask` `defaults.action` | config invalid, exit 2, checker degrades — never fail-open |
-| letter > 64 KiB / > 32 commands | hook degrades locally, no spawn — I4 |
+| configured `maxRequestCommands` > 128 | hook warns and clamps to 128; no degradation solely from configuration |
+| request command count > effective `maxRequestCommands` / letter > 64 KiB | hook degrades locally, no spawn — I4 |
 | hook receives verdict with foreign `invocationId` | degrade — I7 |
+| hook receives a verdict with an unknown `match` value or mismatched command index | degrade — I7 |
+| hook receives malformed v1 diagnostics using a recognized full or truncated key set | degrade; genuinely different v1 facts remain legacy-opaque |
+| no emitted vote for a participating part | per-part default ask; command can be ask with only emitted allow votes |
+| v1 facts contains any reserved diagnostic key but is not an exact full or truncated shape | degrade |
+| recognized full static/argv/allow has no emitted allow vote | degrade |
+| present `ruleId` is not the UTF-8-byte-order smallest emitted vote matching the command verdict, or default ask has no emitted ask vote and carries `ruleId` | degrade |
+| complete and opaque parts in one command | opaque result requires `opaque-expansion`, permits `complete`, and rejects invalid-cause reasons |
+| diagnostics truncation with more than eight complete reasons | retained reasons include `complete`, then the lowest other UTF-8-byte reasons; output is sorted, unique, and has at most eight entries |
+| diagnostics truncation with more than eight opaque reasons | retained reasons include `opaque-expansion`, then the lowest other UTF-8-byte reasons; output is sorted, unique, and has at most eight entries |
+| diagnostics truncation with more than eight invalid reasons | retained reasons include the lowest UTF-8-byte invalid-cause reason, then the lowest other UTF-8-byte reasons; output is sorted, unique, and has at most eight entries |
+| repeated rejected-allow findings for one rule ID | one canonical `rejected` entry carries all sorted, unique coverage reasons; duplicate rule IDs, including property-order variants, are rejected |
+| non-ASCII competing rule IDs | choose the lexicographically smallest UTF-8 byte sequence |
 | hook receives two JSON values on stdout | degrade |
 | deny budget: 4th deny of the same rule | hook silent; request to human (ADR-0010) |
 | stale allow after rules tightening | uncached next check sees new rules; cached allow bounded by TTL — I9 |
@@ -166,3 +181,49 @@ CI re-enforces them:
 
 The golden runner additionally records `spawnMs` per case; the µ-budget acceptance of §10.6
 is re-measured on the board hardware before the hook ships with migrated config defaults.
+
+## 10.8 Verdict v2 contract fixtures and rollout conformance
+
+The verdict-v2 fixture validator and release workflow MUST validate
+[`shell-warden.verdict.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json)
+against every vector listed by the fixture manifest in
+[`schemas/fixtures/shell-warden.verdict.v2`](https://github.com/agent-guardrails/docs/tree/main/schemas/fixtures/shell-warden.verdict.v2/).
+
+The shared manifest MUST identify each vector by schema and one or more roles:
+`checker-producer` for semantic output construction vectors,
+`checker-serialization` for schema/wire serialization vectors, and `hook-consumer`
+for exact v1/v2 ingestion and fail-closed vectors. A vector MAY have multiple
+roles. Checker conformance consumes only its two v2 roles,
+`checker-producer` and `checker-serialization`. Hook conformance consumes
+`hook-consumer` across v1 and v2, including all malformed or partial reserved-key
+v1 diagnostics. All malformed or partial reserved-key v1 vectors are
+`hook-consumer` only; they are not checker conformance requirements.
+
+The validator and workflow MUST additionally verify semantic aggregate consistency,
+because the schema alone cannot establish `deny > ask > allow`. Checker conformance
+tests MUST cover all valid combinations, invalid default bare ask, invalid emitted
+ask with deterministic `ruleId`, invalid ordinary-rule deny, raw verdict size,
+16 KiB facts, depth 8, recognized full and truncated
+diagnostics evidence/reason coherence, malformed known diagnostic members,
+mixed complete and opaque reasons, deterministic complete, opaque, and invalid
+truncation anchors, canonical rejected construction, emitted-vote default-ask
+behavior, Unicode UTF-8 rule-ID ordering, full-diagnostics emitted-vote coherence,
+static/argv/allow emitted-allow proof, default-ask `ruleId` omission, and v2-only
+emission. Hook tests MUST cover the 64 KiB pre-parse cap, exact v1/v2
+discrimination, no v2-to-v1 fallback, post-schema v1 semantic rejection including
+opaque/argv/allow, foreign invocation echo, unknown `match` value or positional
+index, malformed or partial reserved-key v1 diagnostics, positional contiguous
+command-index coverage, both diagnostics shapes, and all anomaly vectors.
+
+Compatibility tests MUST cover exact-valid v1 preservation for old checker plus old hook
+and old checker plus new hook, new checker plus old hook
+rejection through `onCheckerError`, and new checker plus new hook. The old-consumer
+rejection vector describes operational incompatibility, not an accepted deployment
+state. Release tests MUST prove coordinated-pair publication, consumer-first deployment,
+and checker-first rollback.
+
+The hook repository handoff MUST require revision-pinned v0.4.0
+`04cfe594b433d05343044bb848891d7942a4b87c` and v0.2.1
+`7090301963bed3fbe9d2a3f0babf413d521f75f4` harness tests with revision
+provenance. This repository does not claim that those external release tests ran
+or supplies their evidence.
