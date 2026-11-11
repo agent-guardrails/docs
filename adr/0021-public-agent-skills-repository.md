@@ -1,4 +1,4 @@
-# 0017: public repository-managed agent skills
+# 0021: public repository-managed agent skills
 
 * **Status:** Accepted (2026-11-04)
 * **Deciders:** agent-guardrails maintainers
@@ -50,10 +50,13 @@ through `npx skills`. One repository contains multiple skill directories;
 consumers may install the whole pack or select one skill.
 
 The debugging skill uses hypothesis-driven investigation and may optionally
-delegate research or review. The review-work skill uses native `research` and
-`review` agents for evidence-based review, while OpenCode's built-in `explore`
-agent remains for local codebase search. Review-work covers CLI, API, test, and
-build evidence, and excludes UI and visual QA.
+delegate research or review. The portable `review-work` workflow names
+external-research and independent-review roles without requiring concrete
+agents. An OpenCode adapter may map those roles to native `research` and
+`review` agents and may use the built-in `explore` agent for local codebase
+search; these mappings are optional and are not requirements of the skill.
+Review-work covers CLI, API, test, and build evidence, and excludes UI and
+visual QA.
 
 ## Consequences
 

@@ -2,7 +2,7 @@
 
 v0.1 · 2026-11-04 · Status: ready for implementation
 
-Implementation: [`agent-guardrails/agent-skills`](https://github.com/agent-guardrails/agent-skills), public from its first commit. Parent implementation work: [agent-guardrails/.github issue 23](https://github.com/agent-guardrails/.github/issues/23). Documentation work: [agent-guardrails/docs issue 18](https://github.com/agent-guardrails/docs/issues/18). Architectural decision: [ADR-0017](../adr/0017-public-agent-skills-repository.md).
+Implementation: [`agent-guardrails/agent-skills`](https://github.com/agent-guardrails/agent-skills), public from its first commit. Parent implementation work: [agent-guardrails/.github issue 23](https://github.com/agent-guardrails/.github/issues/23). Documentation work: [agent-guardrails/docs issue 18](https://github.com/agent-guardrails/docs/issues/18). Architectural decision: [ADR-0021](../adr/0021-public-agent-skills-repository.md).
 
 ## 1. Purpose and boundaries
 

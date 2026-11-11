@@ -3,7 +3,7 @@
 Status: initial skeleton. Repository design is in
 [`design/agent-skills-repository.md`](../../design/agent-skills-repository.md),
 with the repository choice recorded in
-[ADR-0017](../../adr/0017-public-agent-skills-repository.md).
+[ADR-0021](../../adr/0021-public-agent-skills-repository.md).
 
 `agent-skills` is planned as a public pack of portable Agent Skills in
 `agent-guardrails/agent-skills`.
