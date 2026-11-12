@@ -1,0 +1,30 @@
+{
+  "invocationId": "fixture:duplicate-rejected-rule-id-reversed-properties",
+  "verdict": "ask",
+  "commands": [
+    {
+      "index": 0,
+      "verdict": "ask",
+      "classification": "static",
+      "match": "argv",
+      "facts": {
+        "evidence": "complete",
+        "reasons": ["complete"],
+        "selectedProfiles": ["base"],
+        "matched": ["policy/allow"],
+        "qualified": [],
+        "rejected": [
+          {
+            "ruleId": "policy/allow",
+            "reasons": ["allow-coverage-missing"]
+          },
+          {
+            "reasons": ["allow-coverage-missing"],
+            "ruleId": "policy/allow"
+          }
+        ],
+        "votes": []
+      }
+    }
+  ]
+}

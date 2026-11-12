@@ -1,7 +1,8 @@
 # 08 — Decision Pipeline (checker) & Hook Application
 
-Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
-[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md): rules vote inside the
+Version 2.3 · 2026-11-11 · Revised for verdict v2 per
+[ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) and
+[docs issue 31](https://github.com/agent-guardrails/docs/issues/31): rules vote inside the
 binary and reduce by the fixed lattice; there is no refinement phase, first-match semantics,
 configuration-order meaning, or compatibility grammar.
 
@@ -65,10 +66,10 @@ emits its vote.
    ask. There is no numeric priority, no first-match or last-match behavior, no refinement
    phase, and no configuration-order meaning.
 4. **Part message**: when a vote wins, the per-part deciding rule is the rule with the
-   lexicographically smallest id among that action's emitted votes; its `message` (if any)
+   lexicographically smallest UTF-8 byte sequence among that action's emitted votes; its `message` (if any)
    travels with the part outcome. When NO rule emits a vote (bare default ask), the selected
    profile's `fallbackHints` are considered: hints with no `match` or a satisfied ordinary
-   `match` qualify, and the lexicographically smallest qualifying hint id supplies the part
+   `match` qualify, and the lexicographically smallest UTF-8 byte sequence among qualifying hint IDs supplies the part
    message. Fallback hints never vote and never fire when a rule vote exists.
 
 ## 8.4 Nested parts and analyzer-command findings
@@ -100,19 +101,25 @@ coverage obligations independent of which rules happen to match.
    `deny > ask > allow`; no participating part ⇒ ask.
 3. **Evidence state (per command)**: `invalid` when any participating part is `invalid` or
    the evidence-items cap overflowed; else `opaque` when any participating part is `opaque`;
-   else `complete`. The wire classification (`02 §2.3`) maps `complete` → `static`, and both
-   `opaque` AND `invalid` → `opaque`, with the true state and stable reasons carried in
-   bounded `facts`. `match` is `argv` when the command evidence is `complete`, `raw`
-   otherwise.
-4. **Per-command message**: the lexico-smallest deciding rule id of the winning action among
-   the command's deciding parts (§8.3).
-5. **Letter aggregate**: most-restrictive across commands. The aggregate message is, for the
+   else `complete`. Legacy verdict v1 maps `complete` → `static` and both `opaque` and
+   `invalid` → `opaque` exactly as released. Verdict v2 maps `complete` → `static`,
+   `opaque` → `opaque`, and `invalid` → `invalid`. `match` is `argv` only for
+   complete/static evidence and `raw` otherwise.
+4. **Invalid-evidence ask floor**: an invalid command MUST be at least ask and
+   MUST NEVER allow. When no ordinary rule emits a vote, it is a bare ask and
+   MUST omit `ruleId`. Retained typed evidence or raw text MAY match ordinary ask
+   or deny rules. An emitted ask vote yields ask; deny remains dominant.
+5. **Per-command message and rule ID**: when present, `ruleId` is the
+   UTF-8-byte-order smallest emitted vote whose action matches the command verdict.
+   A default ask with no emitted ask vote MUST omit `ruleId`.
+6. **Letter aggregate**: most-restrictive across commands. The aggregate message is, for the
    commanding verdict: the first per-command explicit message among commands with that
-   verdict; else `defaults.message`; else — deny only — the constant
-   `denied by shell-warden policy`. `allow` aggregates carry no message.
-6. **Monotonicity invariants (normative)**:
+    verdict; else `defaults.message`; else — deny only — the constant
+    `denied by shell-warden policy`. Aggregate `allow` and `ask` messages are
+    optional; aggregate `deny` requires a message.
+7. **Monotonicity invariants (normative)**:
    - REORDERING profiles, rules, options, fallback hints, redirect policies, or entries of
-     the maps/lists MUST NOT change a verdict, a message, or the resolved canonical
+      the maps/lists MUST NOT change a verdict, an optional aggregate message, or the resolved canonical
      redirect-policy set. Messages and rule ids use lexicographic selection exactly so that
      this holds.
    - ADDING a matching allow rule MUST NOT lower any result: it only adds an allow vote, and
@@ -128,16 +135,36 @@ Diagnostics are computed in full before bounds are applied. Per command, the ser
 | Key | Contents |
 |---|---|
 | `evidence` | the command's evidence state: `complete` \| `opaque` \| `invalid` |
-| `reasons` | stable reason codes seen in the graph, sorted and deduplicated |
+| `reasons` | stable reason codes seen in the graph, sorted and deduplicated by UTF-8 bytes before any bounded selection |
 | `selectedProfiles` | profile ids selected by non-collapsed, non-dead parts, in part order |
-| `matched` | ids of every rule whose selectors held (sorted, deduplicated) |
+| `matched` | ids of every rule whose selectors held (sorted by UTF-8 bytes, deduplicated) |
 | `qualified` | ids of allow rules whose coverage proof passed |
-| `rejected` | objects `{ "ruleId": id, "reasons": [stable coverage codes] }` for rejected allow rules |
-| `votes` | emitted vote strings `"{action}:{ruleId}"` in evaluation order |
+| `rejected` | one canonical object `{ "ruleId": id, "reasons": [stable coverage codes] }` per rejected allow rule ID; each object carries all its coverage codes sorted and deduplicated by UTF-8 bytes |
+| `votes` | emitted vote strings `"{action}:{ruleId}"` in evaluation order. Default asks are not votes. |
 
-When the serialized facts exceed `diagnosticsBytes`, the bounded fallback keeps `evidence`,
-the first 8 reasons, and a `diagnostics` marker value `truncated-after-decision`; truncation
-only ever happens AFTER the decision was computed and never affects it.
+For full diagnostics, `votes` records only emitted votes. Each part without an emitted vote
+defaults to ask, so a command may be ask even when all recorded votes are allow. A command
+verdict is never less restrictive than any emitted vote. A full static/argv/allow command
+MUST contain at least one emitted allow vote. When present, `ruleId` MUST be the
+UTF-8-byte-order smallest emitted vote whose action matches the command verdict; a default
+ask with no emitted ask vote MUST omit it.
+
+Before serialization, `reasons` MUST be deduplicated and sorted by UTF-8 bytes.
+`rejected` MUST be constructed by grouping every rejected allow finding by `ruleId`,
+then emitting one entry per rule ID with that rule's complete coverage reasons
+deduplicated and sorted by UTF-8 bytes. Duplicate `ruleId` entries are invalid even
+if their JSON object properties appear in a different order.
+
+When the serialized facts exceed `diagnosticsBytes`, the bounded fallback keeps
+`evidence`, a deterministic `reasons` subset, and a `diagnostics` marker value
+`truncated-after-decision`; truncation only ever happens AFTER the decision was
+computed and never affects it. If the full reason set has at most eight entries,
+the bounded reasons are the full sorted set. Otherwise, retain exactly one evidence
+anchor: `complete` for complete evidence, `opaque-expansion` for opaque evidence,
+or the UTF-8-byte-order lowest invalid-cause reason for invalid evidence. Fill the
+remaining seven slots with the UTF-8-byte-order lowest other reasons, then sort the
+selected unique entries by UTF-8 bytes. The bounded reasons array MUST contain no
+more than eight entries.
 
 ## 8.8 Hook application duties (normative summary)
 
@@ -146,7 +173,7 @@ The hook applies the verdict per ADR-0013 reply automation (03 §3.2):
 1. `allow` → `permission.reply("once")`; cache the verdict (03 §3.4) if `cache.ttlMs > 0`.
 2. `deny` → `permission.reply("reject", message)` — message truncated to 512 chars, never
    widened.
-3. `ask` → no reply — escalation by silence; the native prompt stands.
+3. `ask` → no reply — escalation by silence; the native prompt stands. Its optional aggregate message is not a reply.
 4. Checker anomaly (spawn failure, timeout, non-zero exit, garbage stdout, schema violation)
    → `onCheckerError ∈ {ask, deny}` (09 §9.4); the reply API NEVER synthesizes `allow` from
    an error.
@@ -155,3 +182,32 @@ The hook applies the verdict per ADR-0013 reply automation (03 §3.2):
    for that rule (commands fall to the human).
 6. Tighten-only (I5): an allow reply applies only to a request whose checker verdict was
    allow; an existing native deny is unreachable here and is never loosened.
+
+## 8.9 Verdict v2 serialization and aggregate consistency
+
+The new checker MUST serialize only the closed v2 envelope in 02 §2.7. It MUST
+emit static/argv with allow, ask, or deny; opaque/raw with ask or deny; and
+invalid/raw with ask or deny. Every other combination is invalid. Invalid evidence
+establishes an ask floor and MUST NEVER allow. When no ordinary rule emits a vote,
+it produces a bare ask without `ruleId`. Retained typed evidence or raw text MAY
+match ordinary ask or deny rules. An emitted ask vote yields ask with the
+deterministic `ruleId` selection of §8.6; deny remains dominant. Opaque evidence
+MUST NOT allow.
+
+Before serialization the checker MUST validate v2 output against the expected
+letter invocation ID and positional indexes. Validation includes indexes equal to
+their array positions in both letter and verdict; recognized full or truncated
+diagnostic key sets with well-formed members; stable 07 §7.3 reason codes;
+facts/classification agreement; full-diagnostics emitted-vote semantics; the 16
+KiB facts and depth-8 caps; and the 64 KiB verdict cap. Consumers MUST additionally
+verify those coverage and semantic invariants after schema validation, including
+that the aggregate equals the most-restrictive command verdict. Any
+serialization or aggregate failure is a checker anomaly and takes `onCheckerError`
+through the hook; malformed v2 MUST NOT be retried as v1.
+
+For exact-valid v1 results, a `facts` object containing at least one reserved
+diagnostic key, one of
+`evidence`, `reasons`, `diagnostics`, `selectedProfiles`, `matched`,
+`qualified`, `rejected`, or `votes` MUST be an exact valid full or truncated
+diagnostic shape or fail closed. V1 facts disjoint from those reserved keys
+remain legacy-opaque.

@@ -1,7 +1,8 @@
 # 07 — Parsing (normative for the checker)
 
-Version 2.2 · 2026-11-06 · Revised for the schema-first v2 contract accepted by
-[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md). Parsing remains the
+Version 2.3 · 2026-11-11 · Revised for the schema-first v2 contract accepted by
+[ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and post-schema verdict
+validation in [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md). Parsing remains the
 checker's own and complete; harness-supplied splitting is never trusted.
 
 Parsing is the checker's own (ADR-0016): one scanner turns raw command text into segments per
@@ -74,8 +75,8 @@ Every executable part carries exactly one evidence state:
 | State | Meaning | Allow effect |
 |---|---|---|
 | `complete` | Supported shell syntax, profile option parsing, analyzer processing, and resource limits yielded all typed evidence. | May proceed to matching and allow coverage validation. |
-| `opaque` | Supported syntax contains runtime-dependent content whose words/values are not safely known. | Cannot allow; ask and deny may still match typed classification or raw text. |
-| `invalid` | Syntax or evidence construction is malformed, unsupported for this parser, or exceeds a resource/evidence limit. | Cannot allow; the part reduces no more permissively than ask; deny/ask may still match the typed evidence kept for diagnostics (heredoc parts keep argv). |
+| `opaque` | A coherent supported structure contains runtime-dependent content whose words or values are not safely known. Unterminated quoting remains opaque because its token is unresolvable. | Cannot allow; ask and deny may still match typed classification or raw text. |
+| `invalid` | A required typed structure cannot be constructed because evidence is malformed, unsupported where required, internally inconsistent, or exceeds a resource/evidence limit. | Cannot allow; the part reduces no more permissively than ask; deny/ask may still match the typed evidence kept for diagnostics (heredoc parts keep argv). |
 
 Stable reason codes (the implemented spellings — 08 §8.5):
 
@@ -98,6 +99,14 @@ Stable reason codes (the implemented spellings — 08 §8.5):
 | `option-value-position-uncovered` | A consumed value is not covered by its `byPosition` ordinal selector. |
 | `remainder-uncovered` | Prefix remainder tokens not covered by the remainder policy. |
 | `redirect-policy-uncovered` | Redirect occurrence or target not covered by the effective redirect policy. |
+
+For recognized diagnostics, complete evidence requires `complete`. Opaque evidence
+requires `opaque-expansion`, may also include `complete` for mixed complete and
+opaque parts, and excludes invalid-cause reasons. The invalid-cause reasons are
+`unknown-option`, `option-value-missing`, `invalid-inline-option`,
+`unsupported-syntax`, `empty-command`, and `evidence-limit`; invalid evidence
+requires at least one of them. Allow-coverage reasons do not by themselves make
+evidence invalid.
 
 ## 7.4 Tokens and quote classes
 
@@ -174,7 +183,8 @@ other.
 - `deny`/`ask` messages MUST be prescriptive: tell the agent what to do ("push to a branch and
   open a pull request"), not just what failed. Hook-side deny budgets (ADR-0010) still assume
   one iteration usually suffices.
-- `facts` ≤ 16 KiB, no secrets (I6). Edges: `allow` never carries a message;
+- `facts` ≤ 16 KiB, depth ≤ 8, no secrets (I6). Edges: aggregate `allow` and
+  `ask` may carry an optional message;
   aggregate `deny` falls back to the constant `"denied by shell-warden policy"` when no rule
   carried a message (08 §8.6).
 - Messages: rule templates + allowlisted interpolation only (I11); checker error text never

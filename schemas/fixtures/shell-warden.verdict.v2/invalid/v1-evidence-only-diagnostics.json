@@ -1,0 +1,15 @@
+{
+  "invocationId": "fixture:v1-evidence-only-diagnostics",
+  "verdict": "ask",
+  "commands": [
+    {
+      "index": 0,
+      "verdict": "ask",
+      "classification": "static",
+      "match": "argv",
+      "facts": {
+        "evidence": "complete"
+      }
+    }
+  ]
+}

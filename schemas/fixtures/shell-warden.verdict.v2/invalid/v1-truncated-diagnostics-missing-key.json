@@ -1,0 +1,16 @@
+{
+  "invocationId": "fixture:v1-truncated-diagnostics-missing-key",
+  "verdict": "ask",
+  "commands": [
+    {
+      "index": 0,
+      "verdict": "ask",
+      "classification": "opaque",
+      "match": "raw",
+      "facts": {
+        "evidence": "opaque",
+        "diagnostics": "truncated-after-decision"
+      }
+    }
+  ]
+}

@@ -15,13 +15,14 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 ## Products
 
 > **NEXT SESSION — START HERE:** implementation plan for the checker lives in
-> [`spec/shell-warden/HANDOFF-checker.md`](spec/shell-warden/HANDOFF-checker.md)
+> [`spec/shell-warden/HANDOFF-checker.md`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/HANDOFF-checker.md)
 > (schema-first config v2 per ADR-0017: config loader → parser → splitter → matcher → pipeline →
-> letter/verdict IO → golden + measurement). Open it first.
+> letter/verdict IO → golden + measurement). For verdict v2, read
+> [`HANDOFF-verdict-v2.md`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/HANDOFF-verdict-v2.md) after it.
 
 | Product | Spec | Schemas |
 |---|---|---|
-| `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](schemas/shell-warden.letter.v1.schema.json), [`schemas/shell-warden.verdict.v1.schema.json`](schemas/shell-warden.verdict.v1.schema.json), [`schemas/shell-warden.config.v2.schema.json`](schemas/shell-warden.config.v2.schema.json) |
+| `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.letter.v1.schema.json), [`schemas/shell-warden.verdict.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v1.schema.json), [`schemas/shell-warden.verdict.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json), [`schemas/shell-warden.config.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.config.v2.schema.json) |
 | `pr-review` (auditable pull request review workflow) | [`spec/pr-review/`](spec/pr-review/README.md) | [`schemas/pr-review-bundle.v1.schema.json`](schemas/pr-review-bundle.v1.schema.json), [`schemas/pr-review-findings.v1.schema.json`](schemas/pr-review-findings.v1.schema.json) |
 | `shell-legible` (readability gate, standalone binary) + `opencode-shell-legible-hook` (planned) | — | — |
 | `agent-skills` (public portable Agent Skills pack) | [`spec/agent-skills/`](spec/agent-skills/README.md) | — |
@@ -48,7 +49,10 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0016](adr/0016-two-tier-enforcement.md) | Two-tier enforcement: thin hook → one-shot shell-warden decision binary (supersedes 0002/0005/0007/0008) | Accepted |
 | [0017](adr/0017-schema-first-shell-warden-config-contract.md) | Schema-first Shell Warden v2 configuration contract | Accepted |
 | [0018](adr/0018-script-based-auditable-pr-review-workflow.md) | Shared fixed script contracts for auditable PR review, with MCP deferred as an optional transport | Accepted |
+| [0019](adr/0019-fixed-evidence-bundle-inspection.md) | Fixed evidence bundle inspection | Accepted |
+| [0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md) | Versioned Shell Warden verdict envelope | Superseded historical provenance, see 0022 |
 | [0021](adr/0021-public-agent-skills-repository.md) | Public repository-managed portable Agent Skills | Accepted |
+| [0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) | Post-schema Shell Warden verdict validation | Accepted, current decision |
 
 ## Conventions
 

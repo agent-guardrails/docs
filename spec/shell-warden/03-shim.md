@@ -1,7 +1,8 @@
 # 03 — Hook (OpenCode V2 Plugin Domain)
 
-Version 2.0 · 2026-11-01 · Mechanism per ADR-0013 (reply automation);
-invoker/state per ADR-0016 (one-shot decision binary)
+Version 2.1 · 2026-11-11 · Mechanism per ADR-0013 (reply automation);
+invoker/state per ADR-0016 and verdict v2 per [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md)
+and [docs issue 31](https://github.com/agent-guardrails/docs/issues/31)
 
 ## 3.1 Registrations
 
@@ -82,24 +83,36 @@ Fail-safety:
   back to the native path (human in TUI, auto-reject in headless) — fail-closed
   (I3): the reply API never widens access (an allow reply applies only to a
   request whose checker verdict was allow).
-- `cwd` is fixed to `""` in v0.1: no OpenCode HTTP calls from the ask handler
-  (the evaluate-hook deadlock finding applies to any re-entrant call during
-  permission processing). M1: session-event cache for cwd outside the hot path.
+- Released letter building stamps the project cwd into every `commands[].cwd`.
+  The ask handler makes no OpenCode HTTP call to derive it, because re-entrant
+  calls during permission processing can deadlock.
 
 ## 3.3 Invoker (one-shot spawn, shim-side lifecycle)
 
 Per check (02 §2.1):
 
-1. Build the letter (02 §2.2); pre-send limits: ≤ `maxRequestCommands`
-   commands, letter ≤ 64 KiB — breach ⇒ **local degrade without spawn**.
+1. Build the letter (02 §2.2); the configured `maxRequestCommands` is warned and
+   clamped at 128, and a request exceeding the effective limit or 64 KiB letter
+   cap ⇒ **local degrade without spawn**.
 2. Spawn `checker.command` (absolute argv[0], no shell, **empty child
    environment** — I1), write the letter, close stdin.
 3. Read stdout to EOF; verdict deadline `budgets.checkTimeoutMs`; on breach
    SIGTERM → `killGraceMs` → SIGKILL ⇒ degrade (I3).
-4. Parse the verdict: exactly one JSON value matching
-   `shell-warden.verdict.v1` (02 §2.3); `invocationId` MUST echo the letter's
-   `invocation.id`. Anything else (empty, garbage, multiple values, oversize,
-   foreign echo) ⇒ degrade.
+4. Read and enforce the 64 KiB verdict cap before parsing. Parse exactly one JSON
+   value only after that cap passes. When `protocol` is absent, exact-validate only
+   `shell-warden.verdict.v1`; when it exactly equals `shell-warden.verdict.v2`,
+   exact-validate only the v2 envelope and nested `result` (02 §2.8). Unknown,
+   non-string, malformed protocol or failed v2 validation MUST NOT fall back to
+   v1 and ⇒ degrade. After either exact schema validation, apply the semantic
+   invariants in 02 §2.8 using the expected letter invocation ID and positional
+   indexes: positional contiguous indexes equal to the array position in both
+   letter and verdict, legal classification/match/verdict tuples, required
+   deny message, both recognized diagnostics shapes, and aggregate consistency.
+   This includes rejecting exact-valid v1
+   impossible tuples such as opaque/argv/allow. The selected result's
+   `invocationId` MUST echo the letter's `invocation.id`. Anything else (empty,
+   garbage, multiple values, oversize, foreign echo, invalid coverage or
+   aggregate) ⇒ degrade.
 5. Non-zero exit ⇒ ignore stdout, degrade. Exit 2 (config invalid) ⇒ log the
    stderr line; every re-check will fail the same way until the user fixes the
    file (no retry ladder needed — stateless one-shot).
@@ -155,3 +168,15 @@ The hook owns, keyed by `invocation.sessionID`, bounded (LRU, hook-chosen cap):
 - The checker binary ships separately (`shell-warden` releases, board P3);
   the hook cannot supply policy — the checker path, like the rules file, is
   user-global posture (ADR-0003), enforced by option validation (04 §4.3).
+
+## 3.8 Verdict v2 compatibility and rollout
+
+The dual-read hook MUST accept exact v1 when protocol is absent and exact v2 when
+the protocol is exact. A flat object carrying `protocol` is not v1 because the v1
+root is closed. The hook MUST return the validated nested v2 `result` to the
+existing tighten-only path and MUST NEVER synthesize allow.
+
+Publish compatible hook and checker releases together as one coordinated pair for
+[hook issue 13](https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/13).
+Deploy the dual-read hook first, then the v2-only checker. Roll back the checker
+first. The four-state matrix and completion requirements are normative in 02 §2.9.

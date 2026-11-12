@@ -1,9 +1,10 @@
 # 06 — Checker Configuration: Command Profiles (v2)
 
-Version 2.2 · 2026-11-06 · Schema-first checker configuration v2 accepted by
-[ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md) and tracked by
-[docs#21](https://github.com/agent-guardrails/docs/issues/21). The accepted
-[configuration design](../../design/shell-warden-config-v2.md) defines the public shapes that
+Version 2.3 · 2026-11-11 · Schema-first checker configuration v2 accepted by
+[ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md), with normative
+verdict output updates under [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md),
+and tracked by [docs#21](https://github.com/agent-guardrails/docs/issues/21). The accepted
+[configuration design](https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-config-v2.md) defines the public shapes that
 this specification and the schema make normative.
 
 Schema: `schemas/shell-warden.config.v2.schema.json` (`defaults`, `limits`, `redirectPolicies`,
@@ -286,7 +287,7 @@ failure behavior (exit 2, no stdout; 02 §2.4) rather than widening a verdict.
 
 ## 6.10 Checker CLI
 
-- `shell-warden [--config FILE]` — letter on stdin (02 §2.2), verdict on stdout (02 §2.3);
+- `shell-warden [--config FILE]` — letter on stdin (02 §2.2), v2 verdict on stdout (02 §2.7);
   the only mode; exit codes per 02 §2.4.
 - Config default path: `$XDG_CONFIG_HOME/shell-warden/config.jsonc` (§6.1).
 - Implementation language: Rust (ADR-0015); repository `shell-warden`.

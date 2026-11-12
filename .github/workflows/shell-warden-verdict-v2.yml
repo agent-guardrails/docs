@@ -1,0 +1,36 @@
+name: Shell Warden verdict v2 contract
+
+on:
+  pull_request:
+    paths:
+      - "schemas/shell-warden.verdict.v2.schema.json"
+      - "schemas/shell-warden.verdict.v1.schema.json"
+      - "schemas/shell-warden.config.v2.schema.json"
+      - "schemas/fixtures/shell-warden.verdict.v2/**"
+      - "scripts/validate-shell-warden-verdict-v2-fixtures.mjs"
+      - "scripts/tests/test_validate_shell_warden_verdict_v2_fixtures.mjs"
+      - "spec/shell-warden/**"
+      - "design/shell-warden-verdict-v2.md"
+      - "adr/0020-versioned-shell-warden-verdict-envelope.md"
+      - "adr/0022-post-schema-shell-warden-verdict-validation.md"
+      - ".github/workflows/shell-warden-verdict-v2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install pinned Ajv
+        run: npm install --no-save --no-package-lock ajv@8.17.1
+      - name: Run fixture validator unit tests
+        run: node --test scripts/tests/test_validate_shell_warden_verdict_v2_fixtures.mjs
+      - name: Validate verdict fixtures
+        run: node scripts/validate-shell-warden-verdict-v2-fixtures.mjs

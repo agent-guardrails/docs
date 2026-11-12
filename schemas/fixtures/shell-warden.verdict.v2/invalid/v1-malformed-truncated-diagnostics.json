@@ -1,0 +1,17 @@
+{
+  "invocationId": "fixture:v1-malformed-truncated-diagnostics",
+  "verdict": "ask",
+  "commands": [
+    {
+      "index": 0,
+      "verdict": "ask",
+      "classification": "opaque",
+      "match": "raw",
+      "facts": {
+        "evidence": "opaque",
+        "reasons": ["opaque-expansion"],
+        "diagnostics": "truncated-before-decision"
+      }
+    }
+  ]
+}
