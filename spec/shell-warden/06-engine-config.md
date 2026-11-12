@@ -1,8 +1,8 @@
 # 06 — Checker Configuration: Command Profiles (v2)
 
-Version 2.3 · 2026-11-11 · Schema-first checker configuration v2 accepted by
+Version 2.4 · 2026-11-12 · Schema-first checker configuration v2 accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md), with normative
-verdict output updates under [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md),
+verdict output updates under [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md),
 and tracked by [docs#21](https://github.com/agent-guardrails/docs/issues/21). The accepted
 [configuration design](https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-config-v2.md) defines the public shapes that
 this specification and the schema make normative.
