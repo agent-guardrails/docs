@@ -1,5 +1,5 @@
 {
-  "invocationId": "fixture:v1-exact-hook-preservation",
+  "invocationId": "fixture:v1-flat-response-rejected",
   "verdict": "allow",
   "commands": [
     {

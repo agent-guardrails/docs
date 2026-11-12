@@ -1,8 +1,8 @@
 # 08 — Decision Pipeline (checker) & Hook Application
 
-Version 2.3 · 2026-11-11 · Revised for verdict v2 per
-[ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) and
-[docs issue 31](https://github.com/agent-guardrails/docs/issues/31): rules vote inside the
+Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+[ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
+[docs issue 33](https://github.com/agent-guardrails/docs/issues/33): rules vote inside the
 binary and reduce by the fixed lattice; there is no refinement phase, first-match semantics,
 configuration-order meaning, or compatibility grammar.
 
@@ -101,8 +101,8 @@ coverage obligations independent of which rules happen to match.
    `deny > ask > allow`; no participating part ⇒ ask.
 3. **Evidence state (per command)**: `invalid` when any participating part is `invalid` or
    the evidence-items cap overflowed; else `opaque` when any participating part is `opaque`;
-   else `complete`. Legacy verdict v1 maps `complete` → `static` and both `opaque` and
-   `invalid` → `opaque` exactly as released. Verdict v2 maps `complete` → `static`,
+    else `complete`. Historical verdict v1 mapped `complete` to `static` and both `opaque` and
+    `invalid` to `opaque`. The active v2 contract maps `complete` → `static`,
    `opaque` → `opaque`, and `invalid` → `invalid`. `match` is `argv` only for
    complete/static evidence and `raw` otherwise.
 4. **Invalid-evidence ask floor**: an invalid command MUST be at least ask and
@@ -130,7 +130,7 @@ coverage obligations independent of which rules happen to match.
 ## 8.7 Diagnostics facts (bounded only after the decision)
 
 Diagnostics are computed in full before bounds are applied. Per command, the serialized
-`facts` object (02 §2.3, ≤ `limits.diagnosticsBytes`) records:
+`facts` object (02 §2.8, ≤ `limits.diagnosticsBytes`) records:
 
 | Key | Contents |
 |---|---|
@@ -205,9 +205,5 @@ that the aggregate equals the most-restrictive command verdict. Any
 serialization or aggregate failure is a checker anomaly and takes `onCheckerError`
 through the hook; malformed v2 MUST NOT be retried as v1.
 
-For exact-valid v1 results, a `facts` object containing at least one reserved
-diagnostic key, one of
-`evidence`, `reasons`, `diagnostics`, `selectedProfiles`, `matched`,
-`qualified`, `rejected`, or `votes` MUST be an exact valid full or truncated
-diagnostic shape or fail closed. V1 facts disjoint from those reserved keys
-remain legacy-opaque.
+Verdict v1 output is historical only and MUST NOT be parsed, translated, or used
+as fallback by the active hook.

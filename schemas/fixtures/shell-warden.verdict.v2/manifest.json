@@ -1,15 +1,6 @@
 {
   "fixtures": [
     {
-      "path": "valid/compatibility-old-v1-rejection.json",
-      "schemaVersion": "v2",
-      "roles": ["checker-producer", "checker-serialization", "hook-consumer"],
-      "expectedInvocationId": "fixture:old-consumer",
-      "positionalIndexes": [0],
-      "phase": "valid",
-      "expectedError": null
-    },
-    {
       "path": "valid/ask-emitted-vote.json",
       "schemaVersion": "v2",
       "roles": ["checker-producer", "checker-serialization", "hook-consumer"],
@@ -127,13 +118,18 @@
       "expectedError": null
     },
     {
-      "path": "valid/v1-exact-hook-preservation.json",
-      "schemaVersion": "v1",
+      "path": "invalid/v1-flat-response-rejected.json",
+      "schemaVersion": "v2",
       "roles": ["hook-consumer"],
-      "expectedInvocationId": "fixture:v1-exact-hook-preservation",
+      "expectedInvocationId": "fixture:v1-flat-response-rejected",
       "positionalIndexes": [0],
-      "phase": "valid",
-      "expectedError": null
+      "phase": "consumer-rejection",
+      "expectedError": {
+        "code": "schema.required",
+        "location": "/",
+        "schemaPath": "#/required",
+        "params": { "missingProperty": "protocol" }
+      }
     },
     {
       "path": "invalid/arbitrary-diagnostic-property.json",
@@ -175,18 +171,6 @@
       "positionalIndexes": [0, 1],
       "phase": "semantic",
       "expectedError": { "code": "indexes.duplicate", "location": "/result/commands" }
-    },
-    {
-      "path": "invalid/duplicate-rejected-rule-id-reversed-properties.json",
-      "schemaVersion": "v1",
-      "roles": ["hook-consumer"],
-      "expectedInvocationId": "fixture:duplicate-rejected-rule-id-reversed-properties",
-      "positionalIndexes": [0],
-      "phase": "semantic",
-      "expectedError": {
-        "code": "rejected.duplicate_rule_id",
-        "location": "/commands/0/facts/rejected"
-      }
     },
     {
       "path": "invalid/facts-evidence-inconsistent.json",
@@ -463,51 +447,6 @@
         "location": "/protocol",
         "schemaPath": "#/properties/protocol/const"
       }
-    },
-    {
-      "path": "invalid/v1-evidence-only-diagnostics.json",
-      "schemaVersion": "v1",
-      "roles": ["hook-consumer"],
-      "expectedInvocationId": "fixture:v1-evidence-only-diagnostics",
-      "positionalIndexes": [0],
-      "phase": "semantic",
-      "expectedError": { "code": "diagnostics.malformed", "location": "/commands/0/facts" }
-    },
-    {
-      "path": "invalid/v1-full-diagnostics-extra-key.json",
-      "schemaVersion": "v1",
-      "roles": ["hook-consumer"],
-      "expectedInvocationId": "fixture:v1-full-diagnostics-extra-key",
-      "positionalIndexes": [0],
-      "phase": "semantic",
-      "expectedError": { "code": "diagnostics.malformed", "location": "/commands/0/facts" }
-    },
-    {
-      "path": "invalid/v1-malformed-full-diagnostics.json",
-      "schemaVersion": "v1",
-      "roles": ["hook-consumer"],
-      "expectedInvocationId": "fixture:v1-malformed-full-diagnostics",
-      "positionalIndexes": [0],
-      "phase": "semantic",
-      "expectedError": { "code": "diagnostics.malformed", "location": "/commands/0/facts" }
-    },
-    {
-      "path": "invalid/v1-malformed-truncated-diagnostics.json",
-      "schemaVersion": "v1",
-      "roles": ["hook-consumer"],
-      "expectedInvocationId": "fixture:v1-malformed-truncated-diagnostics",
-      "positionalIndexes": [0],
-      "phase": "semantic",
-      "expectedError": { "code": "diagnostics.malformed", "location": "/commands/0/facts" }
-    },
-    {
-      "path": "invalid/v1-truncated-diagnostics-missing-key.json",
-      "schemaVersion": "v1",
-      "roles": ["hook-consumer"],
-      "expectedInvocationId": "fixture:v1-truncated-diagnostics-missing-key",
-      "positionalIndexes": [0],
-      "phase": "semantic",
-      "expectedError": { "code": "diagnostics.malformed", "location": "/commands/0/facts" }
     }
   ]
 }
