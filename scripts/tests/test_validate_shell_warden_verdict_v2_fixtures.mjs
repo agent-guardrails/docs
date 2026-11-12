@@ -6,14 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import {
   AJV_VERSION,
-  COMPATIBILITY_FIXTURE,
   FIXTURE_ROLES,
   MAX_FACTS_BYTES,
   MAX_FACTS_DEPTH,
   MAX_VERDICT_BYTES,
   aggregateVerdict,
   assertFixtureRoles,
-  assertLegacyRejects,
   assertManifestMatchesDiscovered,
   compareUtf8Bytes,
   discoverFixtureFiles,
@@ -44,16 +42,12 @@ async function readJson(path) {
 }
 
 async function compileSchemas() {
-  const [v2Schema, v1Schema] = await Promise.all([
-    readJson(join(ROOT, "schemas/shell-warden.verdict.v2.schema.json")),
-    readJson(join(ROOT, "schemas/shell-warden.verdict.v1.schema.json")),
-  ]);
+  const v2Schema = await readJson(join(ROOT, "schemas/shell-warden.verdict.v2.schema.json"));
   const Ajv = loadAjv();
   const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false });
   return {
     v2Schema,
     validateV2: ajv.compile(v2Schema),
-    validateV1: ajv.compile(v1Schema),
   };
 }
 
@@ -114,7 +108,7 @@ function errorsForCommand(command) {
   return semanticErrors(document, [command.index]);
 }
 
-function semanticErrors(document, positionalIndexes, invocationId = document.result?.invocationId ?? document.invocationId) {
+function semanticErrors(document, positionalIndexes, invocationId = document.result.invocationId) {
   return semanticValidationErrors(document, { invocationId, positionalIndexes });
 }
 
@@ -209,19 +203,22 @@ test("manifest names every discovered fixture exactly", async () => {
     discoverFixtureFiles(FIXTURES_PATH),
   ]);
   assert.doesNotThrow(() => assertManifestMatchesDiscovered(manifest, discovered));
-  assert.equal(manifest.length, 49);
+  assert.equal(manifest.length, 42);
   assert.throws(
     () => assertManifestMatchesDiscovered(manifest.slice(1), discovered),
     /fixture manifest mismatch/u,
   );
   for (const fixture of manifest) {
-    assert(["valid", "schema", "semantic"].includes(fixture.phase));
-    assert(["v1", "v2"].includes(fixture.schemaVersion));
+    assert(["valid", "schema", "semantic", "consumer-rejection"].includes(fixture.phase));
+    assert.equal(fixture.schemaVersion, "v2");
     assert.equal(typeof fixture.expectedInvocationId, "string");
     assert(Array.isArray(fixture.positionalIndexes));
     assert.equal(fixture.expectedError === null, fixture.phase === "valid");
     assert.doesNotThrow(() => assertFixtureRoles(fixture));
   }
+  const consumerRejections = manifest.filter((fixture) => fixture.phase === "consumer-rejection");
+  assert.deepEqual(consumerRejections.map((fixture) => fixture.path), ["invalid/v1-flat-response-rejected.json"]);
+  assert.deepEqual(consumerRejections[0].roles, ["hook-consumer"]);
 });
 
 test("fixture roles are closed, non-empty, sorted, unique, and phase-aware", () => {
@@ -233,6 +230,13 @@ test("fixture roles are closed, non-empty, sorted, unique, and phase-aware", () 
     roles: [...FIXTURE_ROLES],
   };
   assert.doesNotThrow(() => assertFixtureRoles(v2Valid));
+  const consumerRejection = {
+    ...v2Valid,
+    path: "invalid/v1-flat-response-rejected.json",
+    phase: "consumer-rejection",
+    roles: ["hook-consumer"],
+  };
+  assert.doesNotThrow(() => assertFixtureRoles(consumerRejection));
 
   const malformedCases = [
     { name: "missing", fixture: { ...v2Valid, roles: undefined }, pattern: /roles must be an array/u },
@@ -259,15 +263,6 @@ test("fixture roles are closed, non-empty, sorted, unique, and phase-aware", () 
   }
 
   assert.throws(
-    () => assertFixtureRoles({
-      path: "valid/v1.json",
-      schemaVersion: "v1",
-      phase: "valid",
-      roles: ["checker-producer", "hook-consumer"],
-    }),
-    /v1 fixtures must have exactly the hook-consumer role/u,
-  );
-  assert.throws(
     () => assertFixtureRoles({ ...v2Valid, phase: "schema", roles: [...FIXTURE_ROLES] }),
     /invalid roles for v2 schema fixture/u,
   );
@@ -279,11 +274,15 @@ test("fixture roles are closed, non-empty, sorted, unique, and phase-aware", () 
     }),
     /invalid roles for v2 semantic fixture/u,
   );
+  assert.throws(
+    () => assertFixtureRoles({ ...consumerRejection, roles: ["checker-serialization", "hook-consumer"] }),
+    /invalid roles for v2 consumer-rejection fixture/u,
+  );
 });
 
 test("fixture selection filters known roles and preserves manifest order", () => {
   const fixtures = [
-    { path: "valid/v1.json", roles: ["hook-consumer"] },
+    { path: "invalid/v1-flat-response-rejected.json", roles: ["hook-consumer"] },
     { path: "invalid/schema.json", roles: ["checker-serialization", "hook-consumer"] },
     { path: "invalid/semantic.json", roles: ["checker-producer", "hook-consumer"] },
   ];
@@ -303,8 +302,8 @@ test("fixture selection filters known roles and preserves manifest order", () =>
   assert.throws(() => selectFixturesForRole(fixtures, "runtime"), /unknown fixture role runtime/u);
 });
 
-test("v2 RuleId exactly tracks config v2 Identifier and broad IDs remain v2-only", async () => {
-  const [{ v2Schema, validateV2, validateV1 }, configSchema] = await Promise.all([
+test("v2 RuleId exactly tracks config v2 Identifier and accepts broad IDs", async () => {
+  const [{ v2Schema, validateV2 }, configSchema] = await Promise.all([
     compileSchemas(),
     readJson(join(ROOT, "schemas/shell-warden.config.v2.schema.json")),
   ]);
@@ -315,19 +314,6 @@ test("v2 RuleId exactly tracks config v2 Identifier and broad IDs remain v2-only
   const v2 = v2Document("static", "argv", "allow");
   v2.result.commands[0].ruleId = broadRuleId;
   assert.equal(validateV2(v2), true);
-
-  const v1 = {
-    invocationId: "test:broad-v1-id",
-    verdict: "allow",
-    commands: [{
-      index: 0,
-      verdict: "allow",
-      ruleId: broadRuleId,
-      classification: "static",
-      match: "argv",
-    }],
-  };
-  assert.equal(validateV1(v1), false);
 });
 
 test("schema and semantic validation exercise all 18 command tuples", async () => {
@@ -389,8 +375,6 @@ test("command indexes preserve released positional letter semantics", () => {
   assert(errorCodes(semanticErrors(indexedDocument([0, 2]), [0, 1])).includes("indexes.position"));
   assert(errorCodes(semanticErrors(indexedDocument([0, 2]), [0, 1])).includes("indexes.unexpected"));
   assert.throws(() => semanticErrors(indexedDocument([0]), [1]), /positional sequence/u);
-  const v1NonPositional = indexedDocument([0, 2]).result;
-  assert(errorCodes(semanticErrors(v1NonPositional, [0, 1])).includes("indexes.position"));
 
   assert(errorCodes(semanticErrors(indexedDocument([0]), [0], "test:foreign")).includes("invocation.mismatch"));
 });
@@ -645,93 +629,6 @@ test("full and truncated diagnostics share evidence and reason compatibility", (
   assert(errorCodes(errorsForCommand(command)).includes("reasons.not_sorted_unique"));
 });
 
-test("v1 exact diagnostics are strict while disjoint legacy facts stay open", () => {
-  const base = {
-    invocationId: "test:v1-facts",
-    verdict: "ask",
-    commands: [{ index: 0, verdict: "ask", classification: "static", match: "argv" }],
-  };
-  base.commands[0].facts = fullFacts("complete");
-  assert.deepEqual(semanticErrors(base, [0]), []);
-  base.commands[0].facts.evidence = "opaque";
-  base.commands[0].facts.reasons = ["opaque-expansion"];
-  assert(errorCodes(semanticErrors(base, [0])).includes("evidence.classification_mismatch"));
-
-  base.commands[0].facts = {
-    evidence: "complete",
-    reasons: ["unknown-option"],
-    diagnostics: "truncated-after-decision",
-  };
-  assert(errorCodes(semanticErrors(base, [0])).includes("reasons.complete_required"));
-
-  base.commands[0].classification = "opaque";
-  base.commands[0].match = "raw";
-  for (const [evidence, reasons] of [
-    ["opaque", ["opaque-expansion"]],
-    ["invalid", ["unknown-option"]],
-  ]) {
-    base.commands[0].facts = fullFacts(evidence, [], [], [], reasons);
-    assert.deepEqual(semanticErrors(base, [0]), []);
-    base.commands[0].facts = {
-      evidence,
-      reasons,
-      diagnostics: "truncated-after-decision",
-    };
-    assert.deepEqual(semanticErrors(base, [0]), []);
-  }
-  base.commands[0].facts = fullFacts("complete");
-  assert(errorCodes(semanticErrors(base, [0])).includes("evidence.classification_mismatch"));
-
-  base.commands[0].facts = fullFacts(
-    "opaque",
-    ["allow:policy/allow"],
-    ["policy/allow"],
-    ["policy/allow"],
-    ["opaque-expansion"],
-  );
-  let codes = errorCodes(semanticErrors(base, [0]));
-  assert(!codes.includes("votes.verdict_mismatch"));
-  assert(!codes.includes("rule_id.winner_mismatch"));
-
-  base.commands[0].facts = fullFacts("opaque", [], [], [], ["opaque-expansion"]);
-  base.commands[0].ruleId = "policy/ask";
-  assert(errorCodes(semanticErrors(base, [0])).includes("rule_id.unexpected"));
-  delete base.commands[0].ruleId;
-
-  base.commands[0].facts = {
-    evidence: "invalid",
-    reasons: ["complete"],
-    diagnostics: "truncated-after-decision",
-  };
-  codes = errorCodes(semanticErrors(base, [0]));
-  assert(codes.includes("reasons.invalid_required"));
-
-  base.commands[0].facts = { ...fullFacts("opaque"), reasons: "opaque-expansion" };
-  assert(errorCodes(semanticErrors(base, [0])).includes("diagnostics.malformed"));
-  base.commands[0].facts = {
-    evidence: "opaque",
-    reasons: ["opaque-expansion"],
-    diagnostics: "truncated-before-decision",
-  };
-  assert(errorCodes(semanticErrors(base, [0])).includes("diagnostics.malformed"));
-
-  base.commands[0].facts = { implementationSpecific: { anything: true } };
-  assert.deepEqual(semanticErrors(base, [0]), []);
-
-  const reservedKeyCases = [
-    { name: "evidence only", facts: { evidence: "complete" } },
-    { name: "full plus extra key", facts: { ...fullFacts("complete"), implementationSpecific: true } },
-    {
-      name: "truncated missing reasons",
-      facts: { evidence: "opaque", diagnostics: "truncated-after-decision" },
-    },
-  ];
-  for (const { name, facts } of reservedKeyCases) {
-    base.commands[0].facts = facts;
-    assert(errorCodes(semanticErrors(base, [0])).includes("diagnostics.malformed"), name);
-  }
-});
-
 test("raw verdict byte cap is checked before parse with Unicode-aware boundaries", () => {
   const atLimit = jsonStringWithExactBytes(MAX_VERDICT_BYTES);
   assert.equal(Buffer.byteLength(atLimit, "utf8"), MAX_VERDICT_BYTES);
@@ -742,69 +639,39 @@ test("raw verdict byte cap is checked before parse with Unicode-aware boundaries
 });
 
 test("facts enforce serialized UTF-8 byte and depth caps at exact boundaries", () => {
-  const document = {
-    invocationId: "test:v1-resources",
-    verdict: "ask",
-    commands: [{ index: 0, verdict: "ask", classification: "static", match: "argv" }],
-  };
-  document.commands[0].facts = factsWithExactBytes(MAX_FACTS_BYTES);
-  assert.equal(Buffer.byteLength(JSON.stringify(document.commands[0].facts), "utf8"), MAX_FACTS_BYTES);
+  const document = v2Document("static", "argv", "ask");
+  document.result.commands[0].facts = factsWithExactBytes(MAX_FACTS_BYTES);
+  assert.equal(Buffer.byteLength(JSON.stringify(document.result.commands[0].facts), "utf8"), MAX_FACTS_BYTES);
   assert(!errorCodes(semanticErrors(document, [0])).includes("resource.facts_bytes"));
-  document.commands[0].facts = factsWithExactBytes(MAX_FACTS_BYTES + 1);
+  document.result.commands[0].facts = factsWithExactBytes(MAX_FACTS_BYTES + 1);
   assert(errorCodes(semanticErrors(document, [0])).includes("resource.facts_bytes"));
 
-  document.commands[0].facts = nestedObject(MAX_FACTS_DEPTH);
-  assert.equal(jsonDepth(document.commands[0].facts), MAX_FACTS_DEPTH);
+  document.result.commands[0].facts = nestedObject(MAX_FACTS_DEPTH);
+  assert.equal(jsonDepth(document.result.commands[0].facts), MAX_FACTS_DEPTH);
   assert(!errorCodes(semanticErrors(document, [0])).includes("resource.facts_depth"));
-  document.commands[0].facts = nestedObject(MAX_FACTS_DEPTH + 1);
+  document.result.commands[0].facts = nestedObject(MAX_FACTS_DEPTH + 1);
   assert(errorCodes(semanticErrors(document, [0])).includes("resource.facts_depth"));
 
-  document.commands[0].facts = nestedObject(50_000);
+  document.result.commands[0].facts = nestedObject(50_000);
   assert.doesNotThrow(() => semanticErrors(document, [0]));
   assert(errorCodes(semanticErrors(document, [0])).includes("resource.facts_depth"));
 
   const cyclicFacts = {};
   cyclicFacts.self = cyclicFacts;
-  document.commands[0].facts = cyclicFacts;
+  document.result.commands[0].facts = cyclicFacts;
   assert(errorCodes(semanticErrors(document, [0])).includes("resource.facts_serialization"));
 });
 
-test("exact v1 schema accepts legacy evidence but semantic validation rejects malformed diagnostics", async () => {
-  const [{ validateV1 }, compatibilityDocument, ...malformedDiagnostics] = await Promise.all([
+test("v2 schema rejects a representative flat v1 response at the root", async () => {
+  const [{ validateV2 }, flatV1] = await Promise.all([
     compileSchemas(),
-    readJson(join(FIXTURES_PATH, COMPATIBILITY_FIXTURE)),
-    readJson(join(FIXTURES_PATH, "invalid/v1-evidence-only-diagnostics.json")),
-    readJson(join(FIXTURES_PATH, "invalid/v1-full-diagnostics-extra-key.json")),
-    readJson(join(FIXTURES_PATH, "invalid/v1-malformed-full-diagnostics.json")),
-    readJson(join(FIXTURES_PATH, "invalid/v1-malformed-truncated-diagnostics.json")),
-    readJson(join(FIXTURES_PATH, "invalid/v1-truncated-diagnostics-missing-key.json")),
+    readJson(join(FIXTURES_PATH, "invalid/v1-flat-response-rejected.json")),
   ]);
-  assert.doesNotThrow(() => assertLegacyRejects(validateV1, compatibilityDocument));
-  for (const document of malformedDiagnostics) {
-    assert.equal(validateV1(document), true);
-    assert(errorCodes(semanticErrors(document, [0])).includes("diagnostics.malformed"));
-  }
-
-  const impossible = {
-    invocationId: "test:v1-impossible",
-    verdict: "allow",
-    commands: [{ index: 0, verdict: "allow", classification: "opaque", match: "argv" }],
-  };
-  assert.equal(validateV1(impossible), true);
-  assert(errorCodes(semanticErrors(impossible, [0])).includes("tuple.impossible"));
-
-  for (const vector of [
-    { verdict: "allow", classification: "static", match: "argv" },
-    { verdict: "ask", classification: "opaque", match: "raw" },
-    { verdict: "deny", classification: "opaque", match: "raw" },
-  ]) {
-    const command = { index: 0, ...vector };
-    const document = { invocationId: `test:v1-${vector.verdict}`, verdict: vector.verdict, commands: [command] };
-    if (vector.verdict === "deny") {
-      command.ruleId = "policy/deny";
-      document.message = "Denied by policy.";
-    }
-    assert.equal(validateV1(document), true);
-    assert.deepEqual(semanticErrors(document, [0]), []);
-  }
+  assert.equal(validateV2(flatV1), false);
+  const errors = schemaValidationErrors(validateV2.errors);
+  assert(errors.some((error) =>
+    error.code === "schema.required" &&
+    error.location === "/" &&
+    error.schemaPath === "#/required" &&
+    error.params.missingProperty === "protocol"));
 });

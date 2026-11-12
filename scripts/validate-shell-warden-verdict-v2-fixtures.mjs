@@ -6,7 +6,6 @@ import { dirname, join, relative, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 export const AJV_VERSION = "8.17.1";
-export const COMPATIBILITY_FIXTURE = "valid/compatibility-old-v1-rejection.json";
 export const FIXTURE_ROLES = Object.freeze([
   "checker-producer",
   "checker-serialization",
@@ -18,7 +17,6 @@ export const MAX_FACTS_DEPTH = 8;
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const SCHEMA_PATH = join(ROOT, "schemas/shell-warden.verdict.v2.schema.json");
-const LEGACY_SCHEMA_PATH = join(ROOT, "schemas/shell-warden.verdict.v1.schema.json");
 const FIXTURES_PATH = join(ROOT, "schemas/fixtures/shell-warden.verdict.v2");
 const MANIFEST_PATH = join(FIXTURES_PATH, "manifest.json");
 const FULL_FACT_FIELDS = [
@@ -87,10 +85,6 @@ function validationError(code, location, message) {
   return { code, location, message };
 }
 
-function resultFromDocument(document) {
-  return document?.protocol === "shell-warden.verdict.v2" ? document.result : document;
-}
-
 function hasExactFields(value, fields) {
   return Object.keys(value).sort().join("\0") === [...fields].sort().join("\0");
 }
@@ -157,8 +151,8 @@ function parseVote(vote) {
   return { action: vote.slice(0, separator), ruleId: vote.slice(separator + 1) };
 }
 
-function commandLocation(commandPosition, suffix = "", isV2 = true) {
-  return `${isV2 ? "/result" : ""}/commands/${commandPosition}${suffix}`;
+function commandLocation(commandPosition, suffix = "") {
+  return `/result/commands/${commandPosition}${suffix}`;
 }
 
 export function aggregateVerdict(verdicts) {
@@ -222,17 +216,16 @@ export function parseVerdictJson(rawText) {
 }
 
 export function aggregateConsistencyErrors(document) {
-  const result = resultFromDocument(document);
-  const resultLocation = document?.protocol === "shell-warden.verdict.v2" ? "/result" : "";
+  const result = document?.result;
   if (!result || !Array.isArray(result.commands) || result.commands.length === 0) {
-    return [validationError("commands.empty", `${resultLocation}/commands`, "commands must contain at least one command")];
+    return [validationError("commands.empty", "/result/commands", "commands must contain at least one command")];
   }
   const expected = aggregateVerdict(result.commands.map((command) => command.verdict));
   return result.verdict === expected
     ? []
     : [validationError(
         "aggregate.mismatch",
-        `${resultLocation}/verdict`,
+        "/result/verdict",
         `aggregate verdict is ${String(result.verdict)}; expected ${expected}`,
       )];
 }
@@ -272,10 +265,10 @@ function isSortedUnique(values) {
   return values.every((value, index) => index === 0 || compareUtf8Bytes(values[index - 1], value) < 0);
 }
 
-function diagnosticsCompatibilityErrors(command, commandPosition, isV2) {
+function diagnosticsCoherenceErrors(command, commandPosition) {
   const facts = command.facts;
   const errors = [];
-  const reasonLocation = commandLocation(commandPosition, "/facts/reasons", isV2);
+  const reasonLocation = commandLocation(commandPosition, "/facts/reasons");
   if (!isSortedUnique(facts.reasons)) {
     errors.push(validationError(
       "reasons.not_sorted_unique",
@@ -317,19 +310,18 @@ function diagnosticsCompatibilityErrors(command, commandPosition, isV2) {
     ));
   }
 
-  const expectedEvidence = command.classification === "static" ? ["complete"] :
-    isV2 ? [command.classification] : ["opaque", "invalid"];
+  const expectedEvidence = command.classification === "static" ? ["complete"] : [command.classification];
   if (!expectedEvidence.includes(facts.evidence)) {
     errors.push(validationError(
       "evidence.classification_mismatch",
-      commandLocation(commandPosition, "/facts/evidence", isV2),
+      commandLocation(commandPosition, "/facts/evidence"),
       `evidence ${String(facts.evidence)} does not match classification ${String(command.classification)}`,
     ));
   }
   return errors;
 }
 
-function fullDiagnosticsErrors(command, commandPosition, isV2) {
+function fullDiagnosticsErrors(command, commandPosition) {
   const facts = command.facts;
   const errors = [];
   const votes = facts.votes.map(parseVote);
@@ -340,7 +332,7 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
       !votes.some((vote) => vote.action === "allow")) {
     errors.push(validationError(
       "votes.allow_required",
-      commandLocation(commandPosition, "/facts/votes", isV2),
+      commandLocation(commandPosition, "/facts/votes"),
       "full static allow diagnostics require an emitted allow vote",
     ));
   }
@@ -348,7 +340,7 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
   if (!isSortedUnique(facts.matched)) {
     errors.push(validationError(
       "matched.not_sorted_unique",
-      commandLocation(commandPosition, "/facts/matched", isV2),
+      commandLocation(commandPosition, "/facts/matched"),
       "matched rule IDs must be sorted and deduplicated",
     ));
   }
@@ -357,7 +349,7 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
     if (!isSortedUnique(rejected.reasons)) {
       errors.push(validationError(
         "rejected.reasons_not_sorted_unique",
-        commandLocation(commandPosition, `/facts/rejected/${rejectedPosition}/reasons`, isV2),
+        commandLocation(commandPosition, `/facts/rejected/${rejectedPosition}/reasons`),
         "rejected reasons must be sorted and deduplicated",
       ));
     }
@@ -369,7 +361,7 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
   if (duplicateRejectedRuleIds.length > 0) {
     errors.push(validationError(
       "rejected.duplicate_rule_id",
-      commandLocation(commandPosition, "/facts/rejected", isV2),
+      commandLocation(commandPosition, "/facts/rejected"),
       `duplicate rejected rule IDs: ${duplicateRejectedRuleIds.join(", ")}`,
     ));
   }
@@ -378,7 +370,7 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
     if (!VERDICT_RANK.has(vote.action) || vote.ruleId.length === 0) {
       errors.push(validationError(
         "votes.invalid",
-        commandLocation(commandPosition, "/facts/votes", isV2),
+        commandLocation(commandPosition, "/facts/votes"),
         `vote ${vote.action}:${vote.ruleId} has an invalid action or rule id`,
       ));
     }
@@ -388,14 +380,14 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
     if (!matched.has(ruleId)) {
       errors.push(validationError(
         "qualified.unmatched",
-        commandLocation(commandPosition, "/facts/qualified", isV2),
+        commandLocation(commandPosition, "/facts/qualified"),
         `qualified rule ${String(ruleId)} is not matched`,
       ));
     }
     if (!votes.some((vote) => vote.action === "allow" && vote.ruleId === ruleId)) {
       errors.push(validationError(
         "qualified.missing_vote",
-        commandLocation(commandPosition, "/facts/qualified", isV2),
+        commandLocation(commandPosition, "/facts/qualified"),
         `qualified rule ${String(ruleId)} has no allow vote`,
       ));
     }
@@ -406,7 +398,7 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
     if (typeof ruleId !== "string" || !matched.has(ruleId)) {
       errors.push(validationError(
         "rejected.unmatched",
-        commandLocation(commandPosition, "/facts/rejected", isV2),
+        commandLocation(commandPosition, "/facts/rejected"),
         `rejected allow rule ${String(ruleId)} is not matched`,
       ));
     }
@@ -416,14 +408,14 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
     if (!matched.has(vote.ruleId)) {
       errors.push(validationError(
         "votes.unmatched",
-        commandLocation(commandPosition, "/facts/votes", isV2),
+        commandLocation(commandPosition, "/facts/votes"),
         `vote ${vote.action}:${vote.ruleId} does not identify a matched rule`,
       ));
     }
     if (vote.action === "allow" && !qualified.has(vote.ruleId)) {
       errors.push(validationError(
         "votes.allow_unqualified",
-        commandLocation(commandPosition, "/facts/votes", isV2),
+        commandLocation(commandPosition, "/facts/votes"),
         `allow vote ${vote.ruleId} does not identify a qualified rule`,
       ));
     }
@@ -435,7 +427,7 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
       VERDICT_RANK.get(command.verdict) < VERDICT_RANK.get(strongestEmittedVerdict)) {
     errors.push(validationError(
       "votes.verdict_mismatch",
-      commandLocation(commandPosition, "/facts/votes", isV2),
+      commandLocation(commandPosition, "/facts/votes"),
       `command verdict is ${command.verdict}; emitted votes require at least ${strongestEmittedVerdict}`,
     ));
   }
@@ -447,19 +439,19 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
   if (winningRuleIds.length > 0 && command.ruleId === undefined) {
     errors.push(validationError(
       "rule_id.required",
-      commandLocation(commandPosition, "/ruleId", isV2),
+      commandLocation(commandPosition, "/ruleId"),
       `ruleId must equal the UTF-8 byte-order smallest winning rule ${winningRuleIds[0]}`,
     ));
   } else if (winningRuleIds.length > 0 && command.ruleId !== winningRuleIds[0]) {
     errors.push(validationError(
       "rule_id.winner_mismatch",
-      commandLocation(commandPosition, "/ruleId", isV2),
+      commandLocation(commandPosition, "/ruleId"),
       `ruleId must equal the UTF-8 byte-order smallest winning rule ${winningRuleIds[0]}`,
     ));
   } else if (winningRuleIds.length === 0 && command.ruleId !== undefined) {
     errors.push(validationError(
       "rule_id.unexpected",
-      commandLocation(commandPosition, "/ruleId", isV2),
+      commandLocation(commandPosition, "/ruleId"),
       "ruleId must be absent when there is no winning vote",
     ));
   }
@@ -467,11 +459,9 @@ function fullDiagnosticsErrors(command, commandPosition, isV2) {
 }
 
 export function semanticValidationErrors(document, expectedContext) {
-  const result = resultFromDocument(document);
-  const isV2 = document?.protocol === "shell-warden.verdict.v2";
-  const resultLocation = isV2 ? "/result" : "";
+  const result = document?.result;
   if (!result || !Array.isArray(result.commands) || result.commands.length === 0) {
-    return [validationError("commands.empty", `${resultLocation}/commands`, "commands must contain at least one command")];
+    return [validationError("commands.empty", "/result/commands", "commands must contain at least one command")];
   }
   const positionalIndexes = expectedContext?.positionalIndexes;
   if (typeof expectedContext?.invocationId !== "string" || expectedContext.invocationId.length === 0) {
@@ -487,7 +477,7 @@ export function semanticValidationErrors(document, expectedContext) {
   if (result.invocationId !== expectedContext.invocationId) {
     errors.push(validationError(
       "invocation.mismatch",
-      `${resultLocation}/invocationId`,
+      "/result/invocationId",
       `invocationId is ${String(result.invocationId)}; expected ${expectedContext.invocationId}`,
     ));
   }
@@ -496,7 +486,7 @@ export function semanticValidationErrors(document, expectedContext) {
     if (!VALID_COMMAND_TUPLES.has(tuple)) {
       errors.push(validationError(
         "tuple.impossible",
-        commandLocation(commandPosition, "", isV2),
+        commandLocation(commandPosition),
         `command has impossible tuple ${tuple}`,
       ));
     }
@@ -505,7 +495,7 @@ export function semanticValidationErrors(document, expectedContext) {
       if (factsDepth > MAX_FACTS_DEPTH) {
         errors.push(validationError(
           "resource.facts_depth",
-          commandLocation(commandPosition, "/facts", isV2),
+          commandLocation(commandPosition, "/facts"),
           `facts depth is ${factsDepth}; maximum is ${MAX_FACTS_DEPTH}`,
         ));
       } else {
@@ -518,14 +508,14 @@ export function semanticValidationErrors(document, expectedContext) {
           if (factsBytes > MAX_FACTS_BYTES) {
             errors.push(validationError(
               "resource.facts_bytes",
-              commandLocation(commandPosition, "/facts", isV2),
+              commandLocation(commandPosition, "/facts"),
               `facts are ${factsBytes} UTF-8 bytes; maximum is ${MAX_FACTS_BYTES}`,
             ));
           }
         } catch (error) {
           errors.push(validationError(
             "resource.facts_serialization",
-            commandLocation(commandPosition, "/facts", isV2),
+            commandLocation(commandPosition, "/facts"),
             `facts serialization failed: ${error.message}`,
           ));
         }
@@ -535,15 +525,15 @@ export function semanticValidationErrors(document, expectedContext) {
         if (shape === "malformed" || !diagnosticsMembersAreValid(command.facts, shape)) {
           errors.push(validationError(
             "diagnostics.malformed",
-            commandLocation(commandPosition, "/facts", isV2),
+            commandLocation(commandPosition, "/facts"),
             shape === "malformed"
               ? "facts containing reserved diagnostic keys must use exactly the full or truncated key set"
               : `${shape} diagnostics contain malformed member values`,
           ));
         } else {
-          errors.push(...diagnosticsCompatibilityErrors(command, commandPosition, isV2));
+          errors.push(...diagnosticsCoherenceErrors(command, commandPosition));
           if (shape === "full") {
-            errors.push(...fullDiagnosticsErrors(command, commandPosition, isV2));
+            errors.push(...fullDiagnosticsErrors(command, commandPosition));
           }
         }
       }
@@ -555,7 +545,7 @@ export function semanticValidationErrors(document, expectedContext) {
     if (index !== position) {
       errors.push(validationError(
         "indexes.position",
-        commandLocation(position, "/index", isV2),
+        commandLocation(position, "/index"),
         `command at position ${position} has index ${String(index)}`,
       ));
     }
@@ -565,7 +555,7 @@ export function semanticValidationErrors(document, expectedContext) {
   if (duplicateIndexes.length > 0) {
     errors.push(validationError(
       "indexes.duplicate",
-      `${resultLocation}/commands`,
+      "/result/commands",
       `duplicate command indexes: ${duplicateIndexes.join(", ")}`,
     ));
   }
@@ -574,12 +564,12 @@ export function semanticValidationErrors(document, expectedContext) {
   const missing = positionalIndexes.filter((index) => !actual.has(index)).sort((left, right) => left - right);
   const unexpected = [...actual].filter((index) => !expected.has(index)).sort((left, right) => left - right);
   if (missing.length > 0) {
-    errors.push(validationError("indexes.missing", `${resultLocation}/commands`, `missing command indexes: ${missing.join(", ")}`));
+    errors.push(validationError("indexes.missing", "/result/commands", `missing command indexes: ${missing.join(", ")}`));
   }
   if (unexpected.length > 0) {
     errors.push(validationError(
       "indexes.unexpected",
-      `${resultLocation}/commands`,
+      "/result/commands",
       `unexpected command indexes: ${unexpected.join(", ")}`,
     ));
   }
@@ -636,20 +626,15 @@ export function assertFixtureRoles(fixture) {
     throw new Error(`${fixtureName} roles must be sorted and unique`);
   }
 
-  if (fixture.schemaVersion === "v1") {
-    if (fixture.roles.length !== 1 || fixture.roles[0] !== "hook-consumer") {
-      throw new Error(`${fixtureName} v1 fixtures must have exactly the hook-consumer role`);
-    }
-    return;
-  }
-
   const expectedRoles = fixture.phase === "valid"
     ? FIXTURE_ROLES
     : fixture.phase === "schema"
       ? ["checker-serialization", "hook-consumer"]
       : fixture.phase === "semantic"
         ? ["checker-producer", "hook-consumer"]
-        : undefined;
+        : fixture.phase === "consumer-rejection"
+          ? ["hook-consumer"]
+          : undefined;
   if (fixture.schemaVersion !== "v2" || expectedRoles === undefined ||
       fixture.roles.length !== expectedRoles.length ||
       fixture.roles.some((role, index) => role !== expectedRoles[index])) {
@@ -693,12 +678,6 @@ export function assertManifestMatchesDiscovered(manifest, discovered) {
   }
 }
 
-export function assertLegacyRejects(validateLegacy, document) {
-  if (validateLegacy(document)) {
-    throw new Error("legacy v1 schema unexpectedly accepted the v2 envelope");
-  }
-}
-
 export function loadAjv() {
   const require = createRequire(import.meta.url);
   const installedVersion = require("ajv/package.json").version;
@@ -727,9 +706,8 @@ function hasExpectedError(errors, expectedError) {
 
 export async function main(arguments_ = process.argv.slice(2)) {
   const role = parseCliRole(arguments_);
-  const [schemaText, legacySchemaText, manifest, discovered] = await Promise.all([
+  const [schemaText, manifest, discovered] = await Promise.all([
     readFile(SCHEMA_PATH, "utf8"),
-    readFile(LEGACY_SCHEMA_PATH, "utf8"),
     loadFixtureManifest(),
     discoverFixtureFiles(),
   ]);
@@ -739,13 +717,7 @@ export async function main(arguments_ = process.argv.slice(2)) {
   const Ajv = loadAjv();
   const ajv = new Ajv({ allErrors: true, strict: true, strictRequired: false });
   const validateV2 = ajv.compile(JSON.parse(schemaText));
-  const validateLegacy = ajv.compile(JSON.parse(legacySchemaText));
-  const validators = new Map([
-    ["v1", validateLegacy],
-    ["v2", validateV2],
-  ]);
   const failures = [];
-  let compatibilityDocument;
 
   for (const expectation of selectedManifest) {
     const fixture = discoveredByPath.get(expectation.path);
@@ -755,15 +727,10 @@ export async function main(arguments_ = process.argv.slice(2)) {
       continue;
     }
     const document = parsed.document;
-    const validateExactSchema = validators.get(expectation.schemaVersion);
-    if (validateExactSchema === undefined) {
-      failures.push(`${expectation.path} declares unknown schema version ${String(expectation.schemaVersion)}`);
-      continue;
-    }
-    const schemaValid = validateExactSchema(document);
-    const schemaErrors = schemaValidationErrors(validateExactSchema.errors);
+    const schemaValid = validateV2(document);
+    const schemaErrors = schemaValidationErrors(validateV2.errors);
 
-    if (expectation.phase === "schema") {
+    if (expectation.phase === "schema" || expectation.phase === "consumer-rejection") {
       if (schemaValid || !hasExpectedError(schemaErrors, expectation.expectedError)) {
         failures.push(`${expectation.path} schema result did not contain ${JSON.stringify(expectation.expectedError)}: ${JSON.stringify(schemaErrors)}`);
       }
@@ -788,19 +755,6 @@ export async function main(arguments_ = process.argv.slice(2)) {
     } else if (semanticErrors.length > 0) {
       failures.push(`${expectation.path} unexpectedly failed semantic validation: ${JSON.stringify(semanticErrors)}`);
     }
-    if (expectation.path === COMPATIBILITY_FIXTURE) {
-      compatibilityDocument = document;
-    }
-  }
-
-  if (compatibilityDocument === undefined) {
-    failures.push(`${COMPATIBILITY_FIXTURE} is missing or invalid`);
-  } else {
-    try {
-      assertLegacyRejects(validateLegacy, compatibilityDocument);
-    } catch (error) {
-      failures.push(`${COMPATIBILITY_FIXTURE}: ${error.message}`);
-    }
   }
   if (failures.length > 0) {
     throw new Error(`fixture validation failed:\n${failures.join("\n")}`);
@@ -808,10 +762,10 @@ export async function main(arguments_ = process.argv.slice(2)) {
   const counts = Object.groupBy(selectedManifest, (fixture) => fixture.phase);
   const selection = role === undefined ? "" : ` for role ${role}`;
   console.log(
-    `validated ${selectedManifest.length} manifest-pinned shell-warden verdict fixtures${selection} against their exact schemas ` +
+    `validated ${selectedManifest.length} manifest-pinned shell-warden verdict fixtures${selection} against the v2 schema ` +
       `(${counts.valid?.length ?? 0} valid, ${counts.schema?.length ?? 0} schema-invalid, ` +
-      `${counts.semantic?.length ?? 0} semantic-invalid) with Ajv ${AJV_VERSION}; ` +
-      "exact legacy v1 schema rejected the v2 compatibility envelope",
+      `${counts.semantic?.length ?? 0} semantic-invalid, ` +
+      `${counts["consumer-rejection"]?.length ?? 0} consumer-rejected) with Ajv ${AJV_VERSION}`,
   );
 }
 
