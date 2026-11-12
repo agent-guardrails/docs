@@ -3,10 +3,10 @@
 References: [ADR-0016](https://github.com/agent-guardrails/docs/blob/main/adr/0016-two-tier-enforcement.md) defines two-tier enforcement;
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) defines the public
 configuration contract. Specs 06–10 and `schemas/shell-warden.config.v2.schema.json` mirror the
-accepted design. The letter and released verdict v1 remain immutable; verdict v2 is the new
-checker output contract under the current decision, [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md),
-for [docs issue 31](https://github.com/agent-guardrails/docs/issues/31). [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md)
-is superseded historical provenance. See [`HANDOFF-verdict-v2.md`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/HANDOFF-verdict-v2.md)
+accepted design. The letter remains v1 and the released verdict v1 remains immutable historical
+provenance. Verdict v2 is the only checker output contract under [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md)
+for [docs issue 33](https://github.com/agent-guardrails/docs/issues/33). [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md)
+and [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) are superseded historical provenance. See [`HANDOFF-verdict-v2.md`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/HANDOFF-verdict-v2.md)
 for the cross-repository delta.
 The retired M0 engine (persistent, ADR-0002/0005/0008) stays in `agent-guardrails/shell-warden`
 as reference only — do not extend it; new work is the one-shot decision binary.
@@ -61,18 +61,18 @@ rejected construction, unknown `match` value, foreign invocation, default ask
 rule-ID omission, mixed reasons, and Unicode UTF-8 rule-ID ordering vectors. The
 shared manifest roles are `checker-producer` for semantic output construction,
 `checker-serialization` for schema/wire serialization, and `hook-consumer` for
-exact v1/v2 ingestion and fail-closed vectors; a vector MAY have multiple roles.
+v2 ingestion and rejected-response anomaly vectors; a vector MAY have multiple roles.
 The checker MUST consume only its two v2 roles, `checker-producer` and
 `checker-serialization`, and test every such vector, allowed and rejected
 combination, invalid default bare ask, invalid emitted ask with deterministic
 `ruleId`, invalid ordinary-rule deny, opaque behavior, bounds, and v2-only
 emission. Invalid evidence establishes an ask floor, never allows, and may match
 ordinary ask or deny rules against retained typed evidence or raw text. Do not emit v1
-from the new checker. TypeScript hook work MUST exact-validate v1
-or v2, then enforce the same semantic invariants, caps, positional index coverage,
-both diagnostics shapes, full static/argv/allow emitted-allow proof, rule-ID selection, and
-fail-closed `onCheckerError` handling. The hook consumes `hook-consumer` vectors
-across v1 and v2, including exact-valid v1 preservation. All malformed or partial
-reserved-key v1 vectors are `hook-consumer` only and hook-owned. Compatible hook
-and checker releases are published together as one coordinated pair; deployment
-remains hook first and checker second. Details are in `HANDOFF-verdict-v2.md`.
+from the checker. TypeScript hook work MUST exact-validate only v2, then enforce the
+same semantic invariants, caps, positional index coverage, both diagnostics shapes,
+full static/argv/allow emitted-allow proof, rule-ID selection, and fail-closed
+`onCheckerError` handling. Flat v1, absent or unknown protocol, malformed v2, and
+semantic failures are anomalies with no fallback. The hook consumes v2
+`hook-consumer` vectors and rejected-response anomaly vectors. Checker and hook
+releases are published and deployed together as a coordinated v2-only pair. Details
+are in `HANDOFF-verdict-v2.md`.
