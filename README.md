@@ -22,7 +22,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 
 | Product | Spec | Schemas |
 |---|---|---|
-| `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.letter.v1.schema.json), [`schemas/shell-warden.verdict.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v1.schema.json), [`schemas/shell-warden.verdict.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json), [`schemas/shell-warden.config.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.config.v2.schema.json) |
+| `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.letter.v1.schema.json), historical [`schemas/shell-warden.verdict.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v1.schema.json), active [`schemas/shell-warden.verdict.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json), [`schemas/shell-warden.config.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.config.v2.schema.json) |
 | `pr-review` (auditable pull request review workflow) | [`spec/pr-review/`](spec/pr-review/README.md) | [`schemas/pr-review-bundle.v1.schema.json`](schemas/pr-review-bundle.v1.schema.json), [`schemas/pr-review-findings.v1.schema.json`](schemas/pr-review-findings.v1.schema.json) |
 | `shell-legible` (readability gate, standalone binary) + `opencode-shell-legible-hook` (planned) | — | — |
 | `agent-skills` (public portable Agent Skills pack) | [`spec/agent-skills/`](spec/agent-skills/README.md) | — |
@@ -50,9 +50,10 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0017](adr/0017-schema-first-shell-warden-config-contract.md) | Schema-first Shell Warden v2 configuration contract | Accepted |
 | [0018](adr/0018-script-based-auditable-pr-review-workflow.md) | Shared fixed script contracts for auditable PR review, with MCP deferred as an optional transport | Accepted |
 | [0019](adr/0019-fixed-evidence-bundle-inspection.md) | Fixed evidence bundle inspection | Accepted |
-| [0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md) | Versioned Shell Warden verdict envelope | Superseded historical provenance, see 0022 |
+| [0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md) | Versioned Shell Warden verdict envelope | Superseded historical provenance, see 0023 |
 | [0021](adr/0021-public-agent-skills-repository.md) | Public repository-managed portable Agent Skills | Accepted |
-| [0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) | Post-schema Shell Warden verdict validation | Accepted, current decision |
+| [0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) | Post-schema Shell Warden verdict validation | Superseded historical provenance, see 0023 |
+| [0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) | Shell Warden verdict v2 only | Accepted, current decision |
 
 ## Conventions
 
