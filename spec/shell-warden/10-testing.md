@@ -1,8 +1,8 @@
 # 10 — Testing Strategy
 
-Version 2.3 · 2026-11-11 · Revised for verdict v2 per
-[ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) and
-[docs issue 31](https://github.com/agent-guardrails/docs/issues/31): draft-2020-12 schema
+Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+[ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
+[docs issue 33](https://github.com/agent-guardrails/docs/issues/33): draft-2020-12 schema
 fixtures, golden checker coverage, profile-driven scenario/property tests, and the hook contract
 against a scripted mock binary.
 
@@ -28,8 +28,9 @@ against a scripted mock binary.
               "invocation": { "id": "t1", "sessionID": "s1", "projectDir": "/repo" },
               "action": "shell",
               "commands": [{ "index": 0, "raw": "git push --force origin main", "cwd": "/repo" }] },
-  "expect": { "verdict": "deny", "message": "contains:forbidden",
-              "commands": [{ "index": 0, "ruleId": "git/deny-force-push" }] }
+  "expect": { "protocol": "shell-warden.verdict.v2",
+              "result": { "verdict": "deny", "message": "contains:forbidden",
+                          "commands": [{ "index": 0, "ruleId": "git/deny-force-push" }] } }
 }
 ```
 
@@ -63,9 +64,8 @@ negative case. Spawn latency is recorded per case (§10.6).
 | request command count > effective `maxRequestCommands` / letter > 64 KiB | hook degrades locally, no spawn — I4 |
 | hook receives verdict with foreign `invocationId` | degrade — I7 |
 | hook receives a verdict with an unknown `match` value or mismatched command index | degrade — I7 |
-| hook receives malformed v1 diagnostics using a recognized full or truncated key set | degrade; genuinely different v1 facts remain legacy-opaque |
+| hook receives a flat v1 response | `onCheckerError`; v1 is not an active runtime contract |
 | no emitted vote for a participating part | per-part default ask; command can be ask with only emitted allow votes |
-| v1 facts contains any reserved diagnostic key but is not an exact full or truncated shape | degrade |
 | recognized full static/argv/allow has no emitted allow vote | degrade |
 | present `ruleId` is not the UTF-8-byte-order smallest emitted vote matching the command verdict, or default ask has no emitted ask vote and carries `ruleId` | degrade |
 | complete and opaque parts in one command | opaque result requires `opaque-expansion`, permits `complete`, and rejects invalid-cause reasons |
@@ -192,12 +192,11 @@ against every vector listed by the fixture manifest in
 The shared manifest MUST identify each vector by schema and one or more roles:
 `checker-producer` for semantic output construction vectors,
 `checker-serialization` for schema/wire serialization vectors, and `hook-consumer`
-for exact v1/v2 ingestion and fail-closed vectors. A vector MAY have multiple
+for v2 ingestion and fail-closed vectors. A vector MAY have multiple
 roles. Checker conformance consumes only its two v2 roles,
 `checker-producer` and `checker-serialization`. Hook conformance consumes
-`hook-consumer` across v1 and v2, including all malformed or partial reserved-key
-v1 diagnostics. All malformed or partial reserved-key v1 vectors are
-`hook-consumer` only; they are not checker conformance requirements.
+`hook-consumer` for v2 and rejected-response anomaly vectors. Historical v1 vectors
+are not checker or hook conformance requirements.
 
 The validator and workflow MUST additionally verify semantic aggregate consistency,
 because the schema alone cannot establish `deny > ask > allow`. Checker conformance
@@ -209,21 +208,12 @@ mixed complete and opaque reasons, deterministic complete, opaque, and invalid
 truncation anchors, canonical rejected construction, emitted-vote default-ask
 behavior, Unicode UTF-8 rule-ID ordering, full-diagnostics emitted-vote coherence,
 static/argv/allow emitted-allow proof, default-ask `ruleId` omission, and v2-only
-emission. Hook tests MUST cover the 64 KiB pre-parse cap, exact v1/v2
-discrimination, no v2-to-v1 fallback, post-schema v1 semantic rejection including
-opaque/argv/allow, foreign invocation echo, unknown `match` value or positional
-index, malformed or partial reserved-key v1 diagnostics, positional contiguous
-command-index coverage, both diagnostics shapes, and all anomaly vectors.
+emission. Hook tests MUST cover the 64 KiB pre-parse cap, exact v2 acceptance,
+flat v1 rejection, absent or malformed protocol, malformed v2, foreign invocation
+echo, unknown `match` value or positional index, positional contiguous command-index
+coverage, both diagnostics shapes, and all anomaly vectors.
 
-Compatibility tests MUST cover exact-valid v1 preservation for old checker plus old hook
-and old checker plus new hook, new checker plus old hook
-rejection through `onCheckerError`, and new checker plus new hook. The old-consumer
-rejection vector describes operational incompatibility, not an accepted deployment
-state. Release tests MUST prove coordinated-pair publication, consumer-first deployment,
-and checker-first rollback.
-
-The hook repository handoff MUST require revision-pinned v0.4.0
-`04cfe594b433d05343044bb848891d7942a4b87c` and v0.2.1
-`7090301963bed3fbe9d2a3f0babf413d521f75f4` harness tests with revision
-provenance. This repository does not claim that those external release tests ran
-or supplies their evidence.
+Release tests MUST prove coordinated checker and hook v2-only publication and
+deployment. They MUST NOT require dual-read, compatibility, revision-pinned v1
+preservation, or a rollback that restores v1. This repository does not claim that
+external release tests ran or supplies their evidence.
