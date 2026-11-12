@@ -25,7 +25,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | `shell-warden` (decision binary) + `opencode-shell-warden-hook` (OpenCode V2 thin hook) | [`spec/shell-warden/`](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/README.md) | [`schemas/shell-warden.letter.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.letter.v1.schema.json), historical [`schemas/shell-warden.verdict.v1.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v1.schema.json), active [`schemas/shell-warden.verdict.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json), [`schemas/shell-warden.config.v2.schema.json`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.config.v2.schema.json) |
 | `pr-review` (auditable pull request review workflow) | [`spec/pr-review/`](spec/pr-review/README.md) | [`schemas/pr-review-bundle.v1.schema.json`](schemas/pr-review-bundle.v1.schema.json), [`schemas/pr-review-findings.v1.schema.json`](schemas/pr-review-findings.v1.schema.json) |
 | `shell-legible` (readability gate, standalone binary) + `opencode-shell-legible-hook` (planned) | — | — |
-| `agent-skills` (public portable Agent Skills pack) | [`spec/agent-skills/`](spec/agent-skills/README.md) | — |
+| `agent-skills` (public portable Agent Skills pack) | [`spec/agent-skills/`](spec/agent-skills/README.md) | [`schemas/agent-skills-catalog.v1.schema.json`](schemas/agent-skills-catalog.v1.schema.json) |
 
 ## Decisions index
 

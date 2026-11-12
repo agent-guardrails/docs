@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/agent-guardrails/docs/main/schemas/agent-skills-catalog.v1.schema.json",
+  "title": "agent-skills OpenCode v2 catalog v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["skills"],
+  "properties": {
+    "skills": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/skill" },
+      "allOf": [
+        { "contains": { "properties": { "name": { "const": "ast-grep" } }, "required": ["name"] } },
+        { "contains": { "properties": { "name": { "const": "coding-agent-sessions" } }, "required": ["name"] } },
+        { "contains": { "properties": { "name": { "const": "debugging" } }, "required": ["name"] } },
+        { "contains": { "properties": { "name": { "const": "git-master" } }, "required": ["name"] } },
+        { "contains": { "properties": { "name": { "const": "lsp-setup" } }, "required": ["name"] } },
+        { "contains": { "properties": { "name": { "const": "review-work" } }, "required": ["name"] } }
+      ]
+    }
+  },
+  "$defs": {
+    "skill": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "files"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "files": {
+          "type": "array",
+          "minItems": 3,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/safeRelativePath" },
+          "allOf": [
+            { "contains": { "const": "SKILL.md" } },
+            { "contains": { "const": "LICENSE.md" } },
+            { "contains": { "const": "NOTICE.md" } }
+          ]
+        }
+      }
+    },
+    "safeRelativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*\\\\)(?!.*[?#])(?!.*(?:^|/)\\.{1,2}(?:/|$))[A-Za-z0-9._-]+(?:/[A-Za-z0-9._-]+)*$"
+    }
+  },
+  "$comment": "Repository validation enforces package-directory correspondence, unique skill names, complete inventories, byte-order sorting, regular-file and symbolic-link checks, and content-derived version equality as specified in spec/agent-skills/README.md."
+}
