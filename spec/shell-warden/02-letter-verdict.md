@@ -1,14 +1,13 @@
 # 02 — Letter & Verdict (one-shot contract)
 
-Version 2.2 · 2026-11-11 · Revised for verdict v2 per
-[docs issue 31](https://github.com/agent-guardrails/docs/issues/31) and
-[ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md), which supersedes
-[ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md). The letter and released
-verdict v1 remain immutable; this revision adds the separate v2 response contract.
+Version 2.3 · 2026-11-12 · Revised for verdict v2 only per
+[docs issue 33](https://github.com/agent-guardrails/docs/issues/33) and
+[ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md). The letter remains v1. The released
+verdict v1 schema and earlier ADRs remain immutable historical provenance, not an active response contract.
 
 Schemas: [`letter v1`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.letter.v1.schema.json),
-[`verdict v1`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v1.schema.json),
-[`verdict v2`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json)
+historical [`verdict v1`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v1.schema.json),
+active [`verdict v2`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json)
 
 Revised per [ADR-0016](../../adr/0016-two-tier-enforcement.md): the persistent NDJSON wire protocol
 is retired (supersedes ADR-0002). This document is now the complete process contract of the one-shot
@@ -65,7 +64,11 @@ Limits (enforced by the hook **before spawning**; breach ⇒ local degrade, no s
 by construction (I6). OpenCode's scanner-split subcommands arrive as separate `commands[]` entries —
 the checker NEVER trusts this split (`07-command-parsing.md` §7.2); it re-splits recursively.
 
-## 2.3 Verdict v1 — immutable released response JSON
+## 2.3 Historical verdict v1 response JSON
+
+This section records the released v1 shape only. It is not an active runtime
+contract, and the v2-only hook MUST reject a flat v1 response through
+`onCheckerError`.
 
 ```json
 {
@@ -119,7 +122,7 @@ fail-open). Consequence: a cached hook verdict can outlive a config change by at
 
 ```
 hook → spawn checker, write letter to stdin, close
-chk → {"invocationId":"...","verdict":"deny","message":"...","commands":[...]}
+chk → {"protocol":"shell-warden.verdict.v2","result":{"invocationId":"...","verdict":"deny","message":"...","commands":[...]}}
 chk → exit 0
 hook → permission.reply(decision:"reject", message) / "once" / silence
 ```
@@ -175,7 +178,7 @@ Retained typed evidence or raw text MAY match ordinary ask or deny rules. An
 emitted ask vote yields ask with the deterministic `ruleId` selection of §2.8;
 deny remains dominant. Opaque evidence likewise MUST NOT auto-allow.
 
-## 2.8 Consumer validation and dual-read selection
+## 2.8 Consumer validation
 
 After JSON Schema validation, consumers MUST apply semantic invariants using the
 expected letter context: its `invocation.id`, command count, and positional indexes.
@@ -186,32 +189,20 @@ that `result.verdict` equals the most-restrictive command verdict, `deny > ask >
 allow`. A mismatch is a checker anomaly. Thus invalid ask plus static allow
 aggregates to ask, and invalid ordinary-rule deny aggregates to deny.
 
-The hook MUST select one parser before validation:
-
-1. When `protocol` is absent, it MUST exact-validate only flat v1.
-2. When `protocol` exactly equals `shell-warden.verdict.v2`, it MUST exact-validate only v2.
-3. Unknown, non-string, or malformed `protocol` is a checker anomaly.
-4. Failed v2 validation is a checker anomaly and MUST NOT fall back to v1.
-
-A flat object carrying `protocol` is not v1: the immutable v1 schema rejects its
-unknown root key exactly. The future dual-read hook MUST apply the same post-schema
-semantic invariants to an exact-valid v1 result without changing the v1 schema or
-the released v1 producer behavior. Therefore impossible v1 tuples, including
-`opaque` plus `argv` plus `allow`, fail through `onCheckerError ∈ {ask, deny}`.
-Unknown classifications, protocol values, malformed types, missing classification
-or match, invalid or opaque allow, raw allow, arbitrary v2 diagnostics, inconsistent
-aggregates, or invalid command coverage likewise fail closed.
+The hook MUST accept only an exact v2 envelope with `protocol` exactly
+`shell-warden.verdict.v2`. A flat v1 response, absent, unknown, non-string, or
+malformed `protocol`, failed v2 validation, unknown classifications, malformed
+types, missing classification or match, invalid or opaque allow, raw allow,
+arbitrary v2 diagnostics, inconsistent aggregates, or invalid command coverage is
+a checker anomaly and MUST use `onCheckerError ∈ {ask, deny}`. The hook MUST NOT
+select a v1 parser, fall back, translate, or synthesize allow.
 
 Recognized full facts have exactly the keys `evidence`, `reasons`,
 `selectedProfiles`, `matched`, `qualified`, `rejected`, and `votes`. Recognized
 truncated facts have exactly `evidence`, `reasons`, and `diagnostics` with
 `diagnostics: "truncated-after-decision"`. Every member of either recognized key
 set MUST have its specified type and bounds; malformed members fail closed.
-Any v1 facts object that contains at least one reserved diagnostic key,
-`evidence`, `reasons`, `diagnostics`, `selectedProfiles`, `matched`,
-`qualified`, `rejected`, or `votes`, MUST be one of these exact valid full or
-truncated shapes or fail closed. V1 facts disjoint from all reserved diagnostic
-keys remain legacy-opaque. Recognized facts MUST use stable 07 §7.3 reason codes.
+Recognized v2 facts MUST use stable 07 §7.3 reason codes.
 Full `reasons` MUST be deduplicated and sorted by UTF-8 bytes. Static evidence
 requires `complete`. Opaque evidence requires `opaque-expansion`, may also carry
 `complete` for mixed complete and opaque parts, and MUST NOT carry an invalid-cause
@@ -237,24 +228,14 @@ restrictive reduction of command verdicts. Parser or library text MUST NOT be
 serialized.
 The existing 16 KiB facts/depth-8 and total 64 KiB verdict caps remain mandatory.
 
-## 2.9 Compatibility, rollout, and release completion
+## 2.9 Coordinated release and completion
 
-| Checker | Hook | Required behavior |
-|---|---|---|
-| Old v0.4.0 | Old | Exact schema-valid v1 normal; internal invalid serializes opaque exactly as released. |
-| Old v0.4.0 | New | Exact schema-valid v1 normal; opaque MUST NOT be reinterpreted as invalid. |
-| New | Old | V2 rejects for every verdict because legacy flat root fields are missing; `onCheckerError` fails closed but this is operationally incompatible. |
-| New | New | V2 normal. |
-
-Compatible hook and checker releases MUST be published together as one coordinated
+The checker and hook MUST be published and deployed as one coordinated v2-only
 pair for [hook issue 13](https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/13).
-Deployment MUST remain hook dual-read first, then checker v2. Rollback MUST restore
-the checker first while the dual-read hook continues to accept v1. Migration MUST
-NOT be reported complete until docs and
-schema are merged, hook and checker releases are deployed, compatibility and
-rollback tests pass, and v2 emission is verified.
+No compatibility shim, dual-read mode, old-checker rollout, v1 fallback, or v1
+rollback is supported. Mixed versions are unsupported and fail closed.
 
-The hook repository implementation handoff MUST add revision-pinned v0.4.0 and
-v0.2.1 harness tests with revision provenance: v0.4.0 supplies exact schema-valid
-v1 preservation cases, and v0.2.1 supplies v2-envelope rejection through
-`onCheckerError`. This docs repository supplies no release-test evidence.
+Migration MUST NOT be reported complete until the docs and schema are merged, the
+coordinated hook and checker releases are deployed, v2-only contract tests pass,
+and deployed checker v2 emission is verified. This docs repository supplies no
+release-test evidence.
