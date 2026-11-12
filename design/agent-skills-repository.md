@@ -1,115 +1,75 @@
 # Design: public `agent-skills` repository
 
-v0.1 · 2026-11-04 · Status: ready for implementation
+v0.2 · 2026-11-12 · Status: ready for implementation
 
-Implementation: [`agent-guardrails/agent-skills`](https://github.com/agent-guardrails/agent-skills), public from its first commit. Parent implementation work: [agent-guardrails/.github issue 23](https://github.com/agent-guardrails/.github/issues/23). Documentation work: [agent-guardrails/docs issue 18](https://github.com/agent-guardrails/docs/issues/18). Architectural decision: [ADR-0021](../adr/0021-public-agent-skills-repository.md).
+Implementation: [`agent-guardrails/agent-skills`](https://github.com/agent-guardrails/agent-skills). Parent implementation work: [agent-skills issue 2](https://github.com/agent-guardrails/agent-skills/issues/2). Documentation work: [docs issue 35](https://github.com/agent-guardrails/docs/issues/35). Architectural decision: [ADR-0021](../adr/0021-public-agent-skills-repository.md).
 
 ## 1. Purpose and boundaries
 
-`agent-skills` is a repository-managed pack of portable Agent Skills. It
-provides a reviewable, versioned home for organization skills without making
-one harness configuration the source of truth.
+`agent-skills` is a repository-managed pack of portable Agent Skills. It provides a reviewable, versioned home for organization skills without making one harness configuration the source of truth.
 
-The repository is public and distributes the pack free of charge for
-non-commercial use. Every copied or adapted skill ships with its applicable
-license terms, preserved notices, provenance, and a prominent modification
-statement.
+The repository is public and distributes the pack free of charge for non-commercial use. Every copied or adapted skill carries its applicable license terms, preserved notices, provenance, and a prominent modification statement.
 
-This repository does not provide an agent runtime, a browser workflow, UI or
-visual QA, frontend guidance, or data-processing guidance. Skills run through
-each supported harness's normal skill mechanism and stay usable without an OMO
-runtime or OpenCode-specific contract.
+The pack does not provide an agent runtime, a browser workflow, UI or visual QA, frontend guidance, or data-processing guidance. Skills use each supported harness's normal skill mechanism and remain useful without an OMO runtime or OpenCode-specific contract.
 
-## 2. Repository shape and installation
+## 2. Repository shape and distribution
 
-Each skill follows the standard Agent Skills directory form:
+Each skill is an independently selectable directory under `skills/<name>/`. The initial P0 catalog contains `ast-grep`, `coding-agent-sessions`, `debugging`, `git-master`, `lsp-setup`, and `review-work`.
 
-```text
-skills/
-  debugging/
-    SKILL.md
-  review-work/
-    SKILL.md
-```
+Each package contains `SKILL.md`, `LICENSE.md`, and `NOTICE.md`, plus any package-specific references or scripts. The package directory is authoritative for its license and provenance. Harness adapters may live under `references/harnesses/`, while the portable workflow stays separate from those adapters.
 
-One repository owns the pack. Skills remain independently selectable by name;
-separate repositories are reserved for a future case with distinct ownership,
-licensing, or release cadence.
+Two distribution paths serve different consumers:
 
-Each skill directory is self-contained. It includes `SKILL.md`, the applicable
-license terms, provenance, and a prominent modification notice when adapted.
-Harness-specific examples may live under `references/harnesses/`; the core
-workflow does not require those adapters.
+- The `npx skills` path installs and updates a selected skill as a consumer copy. Users select a skill and target agent with `npx skills add agent-guardrails/agent-skills --skill <name> -a <agent>`, then use the normal `npx skills` check, update, and remove commands.
+- The OpenCode v2 HTTP catalog path starts at a configured catalog base URL ending in `skills/`. OpenCode reads `index.json` at that base, then reads each package file at `<name>/<file>` from the same origin. The catalog supports remote loading without replacing the separate `npx` workflow.
 
-Installation and updates are designed around the `npx skills` workflow. The
-repository documents the conceptual install and update path for organization
-users, but does not link users to repositories outside the organization. The
-installed copy is a consumer artifact, not the editable source. Changes are
-made in this repository, reviewed, released, then adopted by users through the
-same update path.
+The catalog index has a `skills` array. Each entry carries a lowercase kebab-case package name, a content-derived version, and the package's complete sorted list of relative files. Package versions use `sha256:<64 lowercase hex digits>` and change when a package file is added, removed, renamed, or edited. The digest covers sorted relative paths and each file's exact bytes.
+
+Catalog paths stay relative and safe for same-origin fetching. They have no absolute paths, parent traversal, backslashes, query or fragment syntax, or symbolic links. The OpenCode catalog refreshes one installed skill when that skill's catalog version changes.
 
 ## 3. Source policy and provenance
 
-New material belongs to this repository. Existing material is classified before
-it is copied:
+New material belongs to this repository. Existing material is classified before it is copied:
 
 | Source treatment | Policy |
 |---|---|
-| Upstream as-is | Preserve the source text, copyright and license notices, SUL-1.0 terms, and provenance record. Limit local changes to packaging or clearly separated organization notes. |
-| Adapted | Keep the copyright and license notices, SUL-1.0 terms, and provenance record; identify the source material; and add a prominent modification statement describing organization-specific changes. The adapted text must not imply it is an untouched upstream copy. |
+| Upstream as-is | Preserve source text, copyright and license notices, SUL-1.0 terms, and provenance. Local changes are limited to packaging or clearly separated organization notes. |
+| Adapted | Keep copyright and license notices, SUL-1.0 terms, and provenance; identify the source material; and add a prominent modification statement describing organization-specific changes. The adapted text does not present itself as an untouched upstream copy. |
 
-The repository records provenance beside copied or adapted material in the form
-appropriate to the skill layout. Notices remain with the material when it is
-distributed or moved. A missing provenance record blocks acceptance of copied
-or adapted content.
+The repository records provenance beside copied or adapted material in the form appropriate to the package layout. Notices remain with material when it is distributed or moved. Adapted SUL-1.0 material stays free and non-commercial under those terms. A skill can use MIT only when its own source and licensing permit that exception; the P0 `ast-grep` package retains its component-level MIT license.
 
-## 4. Initial skills
+## 4. P0 skills
+
+### `ast-grep`
+
+`ast-grep` searches and rewrites source code by syntax-tree shape.
+
+### `coding-agent-sessions`
+
+`coding-agent-sessions` finds and reconstructs bounded coding-agent session history.
 
 ### `debugging`
 
-The initial adapted public OMO skill is `debugging`. Its portable core teaches a
-hypothesis-driven workflow:
+`debugging` guides evidence-driven runtime debugging and verification through the affected surface.
 
-1. State several plausible causes before changing code.
-2. Gather evidence that distinguishes them.
-3. Confirm the root cause before applying the smallest fitting fix.
-4. Add or update a regression check when the project has a suitable test path.
-5. Verify the behavior through the relevant CLI, API, test, or build surface.
+### `git-master`
 
-The skill may suggest targeted external research or independent review when
-evidence is insufficient or the problem crosses a specialist boundary. Such
-delegation is optional and described by role rather than a harness-specific
-agent name.
+`git-master` covers Git inspection, history work, and explicitly authorized mutations.
+
+### `lsp-setup`
+
+`lsp-setup` configures and verifies Language Server Protocol support.
 
 ### `review-work`
 
-The initial adapted public OMO skill is `review-work`. It orchestrates an
-independent code review using evidence from the repository's CLI, API, tests,
-and build.
-Its scope is implementation correctness, security-relevant behavior, regressions,
-and evidence gaps. It explicitly excludes UI and visual QA.
-
-The workflow names external-research and independent-review roles, not concrete
-agents. Harness adapters may map those roles to available subagents; the skill
-remains useful when a harness has only one agent. It does not require team mode
-or any named runtime.
+`review-work` reviews completed implementation with manual QA and an independent gate review.
 
 ## 5. Validation and release flow
 
-Before release, each changed skill is checked for valid directory placement,
-complete metadata, clear trigger wording, internal link integrity, provenance
-and SUL-1.0 notices where applicable, and consistency with its stated scope.
-The maintainers also exercise the skill through OpenCode's normal loading path
-and run any repository checks available for the pack.
+Before release, maintainers check package placement, metadata, trigger wording, internal links, required notices, provenance, and stated scope. Validation also checks the catalog index, package names, required files, complete sorted inventories, safe regular-file targets, content-derived versions, and the absence of symbolic links.
 
-The release flow is: author change, review in `agent-skills`, validate the
-pack, publish a versioned release, then update consumers through the documented
-`npx skills` path. Documentation and notices travel with the release.
+The release flow is author change, review in `agent-skills`, package and catalog validation, release publication, then adoption through either the `npx skills` or OpenCode catalog path. Documentation and notices travel with the release.
 
 ## 6. Public-release controls
 
-Every release verifies that distribution remains free and non-commercial,
-copied terms and notices remain present, adapted skills carry prominent
-modification statements, provenance resolves to a pinned source revision, and
-installation documentation matches the released layout. A change to commercial
-distribution or incompatible licensing requires a new decision before release.
+Every release checks that distribution remains free and non-commercial, copied terms and notices remain present, adapted skills carry prominent modification statements, provenance resolves to a pinned source revision, and installation documentation matches the released layout. A change to commercial distribution or incompatible licensing requires a new decision before release.
