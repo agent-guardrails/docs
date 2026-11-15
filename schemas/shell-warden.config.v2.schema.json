@@ -1056,6 +1056,7 @@
     },
     "Limits": {
       "type": "object",
+      "description": "Per-document limits default to engine maxima. For repeatable --config, each effective limit is the minimum across files; configBytes bounds the sum of original file bytes and profile/rule caps bound the assembled policy. Evidence/diagnostic caps retain their normal evaluation scope.",
       "properties": {
         "configBytes": { "type": "integer", "minimum": 1, "maximum": 262144 },
         "profiles": { "type": "integer", "minimum": 1, "maximum": 256 },
@@ -1067,6 +1068,8 @@
     },
     "Config": {
       "type": "object",
+      "description": "One complete, independently valid v2 policy document. Repeatable --config assembles disjoint profile IDs and executable spellings, requires equal decoded defaults, and shares redirect-policy names only for identical decoded definitions. Rule and hint IDs remain profile-local. Cross-file references are not supported.",
+      "$comment": "Input-set constraints (canonical-path uniqueness, source conflicts, aggregate budgets, atomic activation) require checker semantic validation; this schema validates each individual document. See spec/shell-warden/06-engine-config.md section 6.1.1 and ADR-0024.",
       "required": ["version", "defaults", "redirectPolicies", "profiles"],
       "properties": {
         "version": { "const": 2 },
