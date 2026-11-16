@@ -1,8 +1,8 @@
 # Design draft: contextual variable allowlists
 
 Status: agreed user-facing direction; schema details proposed
-Current refinement: https://github.com/agent-guardrails/docs/issues/47
-Earlier refinements: https://github.com/agent-guardrails/docs/issues/43 and https://github.com/agent-guardrails/docs/issues/45
+Current refinement: https://github.com/agent-guardrails/docs/issues/49
+Earlier refinements: https://github.com/agent-guardrails/docs/issues/43, https://github.com/agent-guardrails/docs/issues/45, and https://github.com/agent-guardrails/docs/issues/47
 Feature request: https://github.com/agent-guardrails/shell-warden/issues/69
 Design PR: https://github.com/agent-guardrails/docs/pull/44
 Policy contract: https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/06-engine-config.md
@@ -124,9 +124,10 @@ every rule containing that value match. Argument shape, all other value
 constraints, assignment names, redirects, facts, nested parts, and limits still
 need coverage.
 
-An explicit value-independent policy, such as `any`, can cover a parameter value
-only after that rule's matching context gate succeeds. Where a coverage union
-lacks this form, extend that union rather than add a template language.
+For an allow rule, an explicit value-independent policy, such as `any`, can cover
+a parameter value only after that rule's matching context gate succeeds. Where
+a coverage union lacks this form, extend that union rather than add a template
+language.
 
 Literal equality, regexes over runtime values, and resolved-path constraints such
 as `within` cannot be proved from a variable name. Such a required constraint
@@ -143,12 +144,72 @@ classification does not depend on whether a particular allow rule succeeds.
 
 A supported parameter is not a literal and is not globally made safe by any
 allowlist. Each allow rule proves its own context permission and full coverage.
-Ask/deny rules can match the same parameter classification; their emitted votes
-retain priority through `deny > ask > allow`.
+Ask/deny rules inspect the same parameter classification, including the
+uncertainty of its runtime value. Evaluation uses the three-valued result below
+before reducing votes with `deny > ask > allow`.
 
 Remove the earlier proposal's dual view in which old predicates saw opaque
 content while allow rules saw a separate symbolic representation. Migrate rules
 whose old classification assumptions conflict with the unified model.
+
+### Unknown predicates and restrictive rules
+
+Every predicate evaluates to `match`, `no-match`, or `unknown`. A runtime path
+comparison, equality test, or regex over an unresolved parameter value returns
+`unknown`, not `no-match`. Known structural facts remain decidable: a wrong
+executable/profile, an absent required option, or a classification mismatch can
+still prove non-applicability. Value-independent tests do not become unknown
+merely because a parameter is present.
+
+Combine results for the **whole rule**:
+
+- Conjunction: any `no-match` decides `no-match`; otherwise any `unknown` gives
+  `unknown`; otherwise `match`.
+- Disjunction: any `match` decides `match`; otherwise any `unknown` gives
+  `unknown`; otherwise `no-match`.
+- Negation, where the grammar defines it: exchange `match` and `no-match`;
+  `unknown` stays `unknown`.
+- Quantified `any` and `all` use disjunction and conjunction over the observed
+  items. A known-empty `any` is `no-match`, and a known-empty `all` is `match`;
+  explicit existence/cardinality constraints are still evaluated separately.
+  Unresolved values remain observed items, not an empty collection.
+
+Only rules in the selected profile participate. No new symbolic solver is
+required: retain unknown runtime comparisons and combine them with known facts.
+Evaluate enough conditions to find a decisive result; an unknown condition alone
+does not short-circuit a conjunction before a known false condition is examined.
+
+| Complete rule result | Allow rule | Ask rule | Deny rule |
+|---|---|---|---|
+| `match` | Emits allow only with full coverage and required context gates. | Emits ask. | Emits deny. |
+| `no-match` | No vote. | No vote. | No vote. |
+| `unknown` | No allow vote; this failed proof does not veto another allow rule. | Establishes an ask floor. | Establishes an ask floor. |
+
+An unknown ask/deny predicate therefore prevents automatic allow even when a
+different rule qualifies. Apply the floor to that part before command/chain
+aggregation. A conclusive deny still wins. A rule conclusively ruled out by
+another condition establishes no floor; the presence of an unrelated restriction
+does not block every parameterized command.
+
+This is policy uncertainty, not a checker failure and not a proven deny match.
+Record a `predicate-unknown` reason with the responsible restrictive rule IDs
+and predicate coordinates in full diagnostics. An uncertainty-only ask does not
+report the deny rule as a matched vote or as the winning ask `ruleId`; if a real
+ask vote also decides, ordinary winning-rule attribution applies. Preserve the
+uncertainty reason in truncated diagnostics, applying the floor before diagnostic
+limits. Update the closed diagnostic schema and fixtures in the contract change.
+
+### Required restricted-path example
+
+For `ls -- "$HOME"`, suppose one allow rule permits HOME and provides
+value-independent argument/path coverage, while an applicable deny rule tests
+whether that argument is within `/secret`. The deny's path predicate is
+`unknown`, so the result is **ask**, even though the allow rule qualifies. The
+checker does not read HOME to distinguish `/secret` from another runtime value.
+
+With literal `ls -- "/secret"` and otherwise equivalent coverage, the predicate
+matches and the result is deny. With literal `ls -- "/public"` it does not match,
+so an otherwise qualifying allow can win.
 
 ## 6. Coordinated contract replacement
 
@@ -169,10 +230,12 @@ they do not require retaining contradictory runtime behavior.
 ## 7. Delivery and regression cases
 
 Deliver one bounded feature slice: preserve parameter evidence, add the three
-context gates, connect value-independent coverage, and update the single
-evaluator/validator path. Migrate owned configs and remove contradictory old
-paths in that coordinated change. General templates, multiple references per
-word, runtime-value verification, and arbitrary wrappers are separate work.
+context gates, connect value-independent coverage and three-valued restrictive
+predicates, and update the single evaluator/validator path. Replace boolean
+shortcuts that turn unresolved values into false throughout predicate and
+quantifier evaluation. Migrate owned configs and remove contradictory old paths
+in that coordinated change. General templates, multiple references per word,
+runtime-value verification, and arbitrary wrappers are separate work.
 
 Required regressions:
 
@@ -187,6 +250,18 @@ Required regressions:
   argument role; the literal operand boundary is enforced.
 - Every redirect occurrence and assignment destination remains covered.
 - Ask/deny votes, uncovered sibling parts, and resource limits remain effective.
+- A qualifying HOME allow plus an applicable deny for `/secret` yields ask for
+  `ls -- "$HOME"`; the literal restricted/public variants yield deny/allow.
+- An applicable ask rule with an unknown value predicate also blocks automatic
+  allow. A failed unknown allow proof does not veto a different qualifying allow.
+- A restrictive conjunction with a known false condition has no effect even if
+  another condition is unknown; a true alternative in a disjunction is decisive.
+- Unknown under negation or quantification is not converted to false or hidden
+  by dropping the parameter value. Known-empty domains retain the stated identities.
+- A conclusive deny overrides uncertainty elsewhere; a part's uncertainty ask
+  survives aggregation with allowed siblings and diagnostic truncation.
+- Full/truncated diagnostics explain the uncertainty without claiming that the
+  unresolved deny matched or assigning its ID as a winning ask rule.
 - Incompatible versions reject; no fallback or second evaluator runs.
 
 Validate scanner/matcher cases, checker/hook contract fixtures, schema/grammar
