@@ -196,6 +196,15 @@ been computed.
 
 ## Limits
 
+Repeatable explicit `--config` composition follows
+[ADR-0024](https://github.com/agent-guardrails/docs/blob/main/adr/0024-disjoint-shell-warden-config-assembly.md)
+and [configuration §6.1.1](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/06-engine-config.md#611-explicit-file-assembly).
+Each input remains a complete, independently valid v2 document. Profiles are
+disjoint, defaults are equal, and shared redirect bundles are identical. Limits
+take their effective minimum across files; configuration bytes and profile/rule
+counts cover the entire assembled policy. This is modular assembly, not
+last-file-wins replacement or policy intersection.
+
 Limits are fail-closed. A config may lower a configurable limit but cannot raise
 the implementation maximum. Zero, negative values, fractional values, unknown
 limit keys, and values above the maximum invalidate the config. Exceeding any

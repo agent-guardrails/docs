@@ -54,6 +54,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0021](adr/0021-public-agent-skills-repository.md) | Public repository-managed portable Agent Skills | Accepted |
 | [0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) | Post-schema Shell Warden verdict validation | Superseded historical provenance, see 0023 |
 | [0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) | Shell Warden verdict v2 only | Accepted, current decision |
+| [0024](https://github.com/agent-guardrails/docs/blob/main/adr/0024-disjoint-shell-warden-config-assembly.md) | Disjoint explicit shell-warden configuration assembly | Accepted, current decision |
 
 ## Conventions
 

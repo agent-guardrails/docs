@@ -1,6 +1,6 @@
 # 06 — Checker Configuration: Command Profiles (v2)
 
-Version 2.4 · 2026-11-12 · Schema-first checker configuration v2 accepted by
+Version 2.5 · 2026-11-16 · Schema-first checker configuration v2 accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md), with normative
 verdict output updates under [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md),
 and tracked by [docs#21](https://github.com/agent-guardrails/docs/issues/21). The accepted
@@ -20,15 +20,68 @@ external stage tools, no walk invocations, no second process tier.
 
 | | |
 |---|---|
-| Path | `$XDG_CONFIG_HOME/shell-warden/config.jsonc` — single file, user-global only (ADR-0003) |
-| Override | `--config FILE` argv (absolute path after `{env:NAME}` expansion toward an absolute path; hook option, 04) |
-| Trust | The file IS executable policy; a repository can never supply it (ADR-0003). The hook validates this posture per 04 §4.3 |
+| Path | `$XDG_CONFIG_HOME/shell-warden/config.jsonc` — default file, user-global only (ADR-0003); fallback `~/.config/shell-warden/config.jsonc` |
+| Override | Repeatable `--config FILE` argv; every explicit path is absolute after `{env:NAME}` expansion. Explicit files suppress default-path loading. |
+| Trust | Each file IS executable policy; a repository can never supply it (ADR-0003). The hook validates its unchanged configuration posture per 04 §4.3 |
 
 **No reload machinery**: the checker re-reads and re-validates the file on every spawn (02
 §2.5). Strict validation: unknown keys (closed JSON Schema plus `denyUnknownFields`-equivalent
 strictness), wrong types, cap violations, unresolved cross-references ⇒ config invalid ⇒
 exit 2 (never fail-open, 09 I3). Valid comments (`jsonc`) are allowed; a JSONC syntax error is
 invalid config. The `configBytes` cap is checked on the raw file bytes before parsing.
+
+### 6.1.1 Explicit-file assembly
+
+[ADR-0024](https://github.com/agent-guardrails/docs/blob/main/adr/0024-disjoint-shell-warden-config-assembly.md)
+selects disjoint structural assembly, not overlays or independent-policy
+intersection. Design:
+https://github.com/agent-guardrails/docs/issues/39.
+Implementation:
+https://github.com/agent-guardrails/shell-warden/issues/51.
+Contract tracking:
+https://github.com/agent-guardrails/docs/issues/40.
+
+- Without explicit paths the checker MUST retain the existing XDG/HOME default.
+  With any explicit paths it MUST read only those files, in argument order; it
+  MUST NOT discover repository-local policy.
+- The checker MUST expand `{env:NAME}` separately for every explicit path and
+  require an absolute result. Unset variables and unreadable paths invalidate
+  the input set. It MUST canonicalize paths and reject repeated canonical
+  paths, including symlink aliases. Distinct hard links are distinct inputs.
+- Each file MUST be a complete, independently valid v2 document. Empty bytes,
+  `{}`, and incomplete fragments are invalid; complete policies with empty
+  `profiles` are valid. Duplicate object keys remain invalid. A reference MUST
+  resolve within its own file; assembly MUST NOT repair unresolved references.
+- Decoded `defaults` MUST be equal, including the optional message and default
+  redirect-policy name. Omitted optional members keep their normal decoded
+  defaults. There is no last-file-wins precedence.
+- The checker MUST concatenate profiles in argument order and reject duplicate
+  profile IDs and executable spellings, even for identical profiles. Profile
+  grammars, rules, and fallback hints MUST NOT be extended or replaced. Rule
+  and hint IDs retain profile-local uniqueness; equal IDs in different
+  profiles are permitted. Option aliases likewise remain profile-local.
+- Named redirect policies MUST be unioned. A shared name MUST have an equal
+  decoded definition in every file that declares it; conflicting definitions
+  invalidate the set. Equality preserves list order. Bundles MUST NOT be
+  extended or replaced by another input file.
+- Every effective limit MUST be the minimum across all files, with omitted
+  limit members retaining engine maxima. Every configured value MUST be a
+  positive integer no greater than its engine maximum. `configBytes` MUST
+  bound the sum of original file bytes, including comments; file reads MUST be
+  bounded by the engine maximum before parsing. Profile and rule caps MUST
+  apply to the assembled policy. Evidence and diagnostic caps retain their
+  normal evaluation scope.
+- The assembled policy MUST pass semantic validation before activation. All
+  configuration loading MUST finish before stdin consumption or command
+  evaluation. Any path, parse, schema, semantic, conflict, or aggregate-budget
+  failure MUST exit 2 with empty stdout. No valid prefix may become active.
+- Per-file errors MUST identify the source path. Conflicts MUST identify the
+  conflicting field or identifier and both source paths. Aggregate-budget
+  errors MUST identify the input set.
+
+This operation intentionally adds coverage for newly configured executables.
+It does not narrow an existing executable's policy. The hook configuration and
+individual-file schema shape are unchanged.
 
 ## 6.2 Top-level schema
 
@@ -287,9 +340,13 @@ failure behavior (exit 2, no stdout; 02 §2.4) rather than widening a verdict.
 
 ## 6.10 Checker CLI
 
-- `shell-warden [--config FILE]` — letter on stdin (02 §2.2), v2 verdict on stdout (02 §2.7);
+- `shell-warden [--config FILE]...` — letter on stdin (02 §2.2), v2 verdict on stdout (02 §2.7);
   the only mode; exit codes per 02 §2.4.
 - Config default path: `$XDG_CONFIG_HOME/shell-warden/config.jsonc` (§6.1).
+- `--config /policies/git.jsonc --config /policies/rust.jsonc` assembles disjoint
+  profiles under §6.1.1; explicit files suppress the default path.
+- `--help` / `-h` MUST describe repetition, lack of override precedence, default
+  suppression, and atomic configuration failure.
 - Implementation language: Rust (ADR-0015); repository `shell-warden`.
 
 ## 6.11 Golden requirement

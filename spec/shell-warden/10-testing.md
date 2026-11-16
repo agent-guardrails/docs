@@ -19,6 +19,16 @@ against a scripted mock binary.
 | Contract (hook) | hook vs a **mock checker** (scripted binary): spawn success/fail, timeout kill + grace, garbage/oversize/empty stdout, non-zero exits (incl. 2), schema-violating verdict, wrong `invocationId` echo, concurrency cap, tighten-only proof, cache TTL, deny budget | `tests/contract` (hook repo) | no |
 | Integration | real OpenCode: allowlist scenario, deny with visible reason in native prompt, `onCheckerError: "deny"` drill (non-spawnable checker path), project-config-ignored warning | `tests/integration` (manual/CI with `opencode run`) | yes |
 
+### Repeatable configuration contract
+
+Repeatable explicit configuration (§6.1.1) MUST also have real checker-binary
+tests for both argument orders; one-file/default-path compatibility; explicit
+default suppression; profile/executable/default/bundle conflicts with source
+paths; profile-local rule and hint IDs; canonical and symlink duplicates;
+environment expansion; empty and invalid later inputs; aggregate byte and
+profile/rule budgets; minimum evidence/diagnostic limits; independent reference
+validation; and exit 2 with empty stdout on any configuration error.
+
 ## 10.2 Golden format
 
 ```jsonc
