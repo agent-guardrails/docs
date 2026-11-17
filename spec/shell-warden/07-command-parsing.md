@@ -1,6 +1,8 @@
 # 07 — Parsing (normative for the checker)
 
-Version 2.4 · 2026-11-12 · Revised for the schema-first v2 contract accepted by
+Version 3.0 · 2026-11-17 · Contextual parameter evidence follows
+[ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
+[12 — Contextual parameters](12-contextual-parameters.md). The schema-first foundation was accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and post-schema verdict
 validation in [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md). Parsing remains the
 checker's own and complete; harness-supplied splitting is never trusted.
@@ -52,11 +54,11 @@ Wrappers unwrap into child parts; the wrapped command evaluates on its own under
 
 | Head | Unwrap |
 |---|---|
-| `bash -c`, `sh -c` | each operand segment becomes a wrapper child; extra words after the operand are appended to the last child argv (they can only add arguments; `$0`/`$1` are not symbolically resolved) |
+| `bash -c`, `sh -c` | Only the fixed literal-script form is transparent. Children use the same parser/evidence model; outer assignments and redirects remain coverage obligations. Extra operands or unsupported wrapper options keep the wrapper opaque while a known literal body still exposes restrictive children. `$0`/`$1` extras MUST NOT be appended as fabricated child argv/options. |
 | `sudo`, `nohup` | transparent: the rest of the argv becomes the child; options of the wrapper head make the part opaque; a bare wrapper head is opaque |
 | `nice` | `-n N` is skipped; other wrapper options are opaque |
 | `timeout` | the duration argument (`<n>[smhd]`) is skipped and validated; a missing or non-parsing duration is opaque |
-| `env` | assignments are transparent prefixes; wrapper options are opaque |
+| `env` | A literal command without utility assignment operands/options is transparent. Utility assignments are not direct shell-prefix evidence: keep that wrapper opaque, retaining known executable children for restrictions instead of discarding destinations. |
 | `xargs` | stays VISIBLE: emits the operand as an opaque child and marks itself opaque ("executes from stdin") — the child only becomes a matchable `analyzer-command` part when the selected profile runs `xargs-v1` (08 §8.4) |
 
 A wrapper part that has been unwrapped ("collapsed") carries no votes, no selected profile,
@@ -75,6 +77,7 @@ Every executable part carries exactly one evidence state:
 | State | Meaning | Allow effect |
 |---|---|---|
 | `complete` | Supported shell syntax, profile option parsing, analyzer processing, and resource limits yielded all typed evidence. | May proceed to matching and allow coverage validation. |
+| `parameter` | Nonliteral values are supported simple parameter candidates, retained without a runtime value. | May allow only with rule-local context gates and complete value-independent coverage (12 §12.4). |
 | `opaque` | A coherent supported structure contains runtime-dependent content whose words or values are not safely known. Unterminated quoting remains opaque because its token is unresolvable. | Cannot allow; ask and deny may still match typed classification or raw text. |
 | `invalid` | A required typed structure cannot be constructed because evidence is malformed, unsupported where required, internally inconsistent, or exceeds a resource/evidence limit. | Cannot allow; the part reduces no more permissively than ask; deny/ask may still match the typed evidence kept for diagnostics (heredoc parts keep argv). |
 
@@ -83,6 +86,8 @@ Stable reason codes (the implemented spellings — 08 §8.5):
 | Reason | Meaning |
 |---|---|
 | `complete` | Fully typed evidence. |
+| `parameter-expansion` | Supported parameter evidence, not literal argv. |
+| `predicate-unknown` | A complete potentially applicable restrictive predicate is unknown; establishes a part-local ask floor. |
 | `opaque-expansion` | Active expansion, unquoted glob/brace/tilde, or an unresolvable wrapper shape. |
 | `unknown-option` | Profile option parse found an undeclared option token. |
 | `option-value-missing` | An option consumed fewer values than its arity. |
@@ -90,7 +95,7 @@ Stable reason codes (the implemented spellings — 08 §8.5):
 | `unsupported-syntax` | Heredoc/here-string or another unsupported structural form. |
 | `empty-command` | Whitespace-only command text. |
 | `evidence-limit` | Evidence items cap or nesting depth bound reached. |
-| `allow-evidence-not-complete` | An allow rule saw evidence that is not `complete`. |
+| `allow-evidence-not-complete` | An allow rule saw unsupported opaque/invalid evidence. |
 | `allow-coverage-missing` | An allow coverage selector did not cover an item (generic). |
 | `required-option-missing` | `required: true` option entry had no occurrence. |
 | `option-not-repeatable` | More occurrences than `"repeatable": false` permits. |
@@ -127,7 +132,11 @@ captured inner texts of active substitutions. Quote-class rules (closed):
 | An empty decoded token | dropped |
 
 A literal regex `$` (inside quotes, or escaped) is NOT dynamic. A bare `$` is opaque noise.
-When any word of the segment is unresolvable, the part is `opaque` (`opaque-expansion`).
+When nonliteral values all satisfy the supported parameter grammar in 12 §12.2,
+the part is `parameter`, independently of permissions. Other unresolvable content
+is `opaque` (`opaque-expansion`). Original source and quote/escape information
+MUST determine this distinction; decoded expansion markers MUST NOT be treated as
+values. Empty quoted literal arguments remain observed.
 
 **Spans (non-normative).** Token spans are diagnostic bookkeeping only: a token's recorded end
 is its decode length from the start — they MUST NOT be consulted by decision logic, and their
@@ -179,7 +188,8 @@ other.
   inline forms make the part `invalid`; the unknown token remains visible as a positional
   token for diagnostics and raw rules.
 
-- `allow` ⇒ only `complete` evidence AND the full coverage proof (06 §6.7) (09 I12).
+- `allow` ⇒ only `complete` or supported `parameter` evidence AND the full coverage
+  proof, context gates, and no restrictive uncertainty floor (12 §§12.3–12.5).
 - `deny`/`ask` messages MUST be prescriptive: tell the agent what to do ("push to a branch and
   open a pull request"), not just what failed. Hook-side deny budgets (ADR-0010) still assume
   one iteration usually suffices.

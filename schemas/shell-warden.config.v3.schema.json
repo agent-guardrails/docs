@@ -1,0 +1,2195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/agent-guardrails/docs/main/schemas/shell-warden.config.v3.schema.json",
+  "title": "Shell Warden configuration v3",
+  "$comment": "Active contextual parameter contract. v2 is historical; no compatibility reader.",
+  "$ref": "#/$defs/Config",
+  "$defs": {
+    "Identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^\\S+$"
+    },
+    "PolicyIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^\\S+$"
+    },
+    "OccurrenceSelector": {
+      "oneOf": [
+        {
+          "const": "all"
+        },
+        {
+          "type": "integer",
+          "minimum": 1
+        }
+      ]
+    },
+    "FdSelector": {
+      "oneOf": [
+        {
+          "const": "default"
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ]
+    },
+    "RegexPattern": {
+      "type": "string",
+      "maxLength": 1024,
+      "not": {
+        "pattern": "\\(\\?(?:[=!]|<[=!])|\\\\[1-9]"
+      },
+      "$comment": "RE2-v1 compatibility is completed by compile-time semantic validation; this local shape rejects look-around and numeric backreferences."
+    },
+    "AbsoluteLexicalPath": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^/",
+      "not": {
+        "pattern": "//|(?:^|/)\\.\\.?(?:/|$)"
+      }
+    },
+    "StringValueSelector": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "oneOf"
+          ],
+          "properties": {
+            "oneOf": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "regex"
+          ],
+          "properties": {
+            "regex": {
+              "$ref": "#/$defs/RegexPattern"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PathSelector": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "exact"
+          ],
+          "properties": {
+            "exact": {
+              "$ref": "#/$defs/AbsoluteLexicalPath"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "within"
+          ],
+          "properties": {
+            "within": {
+              "$ref": "#/$defs/AbsoluteLexicalPath"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "outside"
+          ],
+          "properties": {
+            "outside": {
+              "$ref": "#/$defs/AbsoluteLexicalPath"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "TokenSelector": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/StringValueSelector"
+        },
+        {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/PathSelector"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "IntegerBounds": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "integer"
+        },
+        "max": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "min"
+          ]
+        },
+        {
+          "required": [
+            "max"
+          ]
+        }
+      ],
+      "$comment": "Semantic validation additionally requires min <= max."
+    },
+    "NumberBounds": {
+      "type": "object",
+      "properties": {
+        "min": {
+          "type": "number"
+        },
+        "max": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "anyOf": [
+        {
+          "required": [
+            "min"
+          ]
+        },
+        {
+          "required": [
+            "max"
+          ]
+        }
+      ],
+      "$comment": "Semantic validation additionally requires min <= max."
+    },
+    "TypedValueSelector": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "exact"
+          ],
+          "properties": {
+            "exact": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "string"
+          ],
+          "properties": {
+            "string": {
+              "$ref": "#/$defs/StringValueSelector"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "integer"
+          ],
+          "properties": {
+            "integer": {
+              "$ref": "#/$defs/IntegerBounds"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "number"
+          ],
+          "properties": {
+            "number": {
+              "$ref": "#/$defs/NumberBounds"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "boolean"
+          ],
+          "properties": {
+            "boolean": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "path"
+          ],
+          "properties": {
+            "path": {
+              "$ref": "#/$defs/PathSelector"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ArgumentsMatcher": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "exact": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prefix": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "containsAny": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "RemainderPolicy": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "each"
+          ],
+          "properties": {
+            "each": {
+              "$ref": "#/$defs/TokenSelector"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ArgumentsCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "exact"
+          ],
+          "properties": {
+            "exact": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "prefix",
+            "remainder"
+          ],
+          "properties": {
+            "prefix": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remainder": {
+              "$ref": "#/$defs/RemainderPolicy"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "OptionsMatcher": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "properties": {
+            "presentAll": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/PolicyIdentifier"
+              }
+            },
+            "presentAny": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/PolicyIdentifier"
+              }
+            },
+            "absentAll": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/PolicyIdentifier"
+              }
+            },
+            "values": {
+              "type": "object",
+              "minProperties": 1,
+              "propertyNames": {
+                "$ref": "#/$defs/PolicyIdentifier"
+              },
+              "additionalProperties": {
+                "$ref": "#/$defs/TokenSelector"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "OptionCoverage": {
+      "type": "object",
+      "required": [
+        "option",
+        "required",
+        "repeatable"
+      ],
+      "properties": {
+        "option": {
+          "$ref": "#/$defs/PolicyIdentifier"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "repeatable": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "$comment": "Zero-arity option coverage. Positive arity uses PositiveArityOptionCoverage."
+    },
+    "PositiveArityOptionCoverage": {
+      "type": "object",
+      "required": [
+        "option",
+        "required",
+        "repeatable",
+        "values"
+      ],
+      "properties": {
+        "option": {
+          "$ref": "#/$defs/PolicyIdentifier"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "repeatable": {
+          "type": "boolean"
+        },
+        "values": {
+          "$ref": "#/$defs/OptionValueCoverage"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OptionValueCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "each"
+          ],
+          "properties": {
+            "each": {
+              "$ref": "#/$defs/TokenSelector"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "byPosition"
+          ],
+          "properties": {
+            "byPosition": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 4,
+              "items": {
+                "$ref": "#/$defs/TokenSelector"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "$comment": "Semantic validation requires byPosition length to equal the declared fixed arity."
+    },
+    "OptionsCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "allowed"
+          ],
+          "properties": {
+            "allowed": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/OptionCoverage"
+                  },
+                  {
+                    "$ref": "#/$defs/PositiveArityOptionCoverage"
+                  }
+                ]
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "$comment": "Semantic validation rejects repeated canonical option ids even when entries differ."
+    },
+    "PositionalCoordinate": {
+      "type": "object",
+      "required": [
+        "index"
+      ],
+      "properties": {
+        "index": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "remainder": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OptionValueCoordinate": {
+      "type": "object",
+      "required": [
+        "option",
+        "valueOrdinal"
+      ],
+      "properties": {
+        "option": {
+          "$ref": "#/$defs/PolicyIdentifier"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        },
+        "valueOrdinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4
+        }
+      },
+      "additionalProperties": false
+    },
+    "EnvironmentCoordinate": {
+      "type": "object",
+      "properties": {
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RedirectCoordinate": {
+      "type": "object",
+      "required": [
+        "operator",
+        "sourceFd"
+      ],
+      "properties": {
+        "operator": {
+          "enum": [
+            "<",
+            ">",
+            ">>",
+            ">&",
+            "<&"
+          ]
+        },
+        "sourceFd": {
+          "$ref": "#/$defs/FdSelector"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AnalyzerFactCoordinate": {
+      "type": "object",
+      "required": [
+        "analyzer",
+        "version",
+        "name"
+      ],
+      "properties": {
+        "analyzer": {
+          "$ref": "#/$defs/AnalyzerId"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "$ref": "#/$defs/PolicyIdentifier"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "PathCoordinateSelector": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "argument"
+          ],
+          "properties": {
+            "argument": {
+              "$ref": "#/$defs/PositionalCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "optionValue"
+          ],
+          "properties": {
+            "optionValue": {
+              "$ref": "#/$defs/OptionValueCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "environment"
+          ],
+          "properties": {
+            "environment": {
+              "$ref": "#/$defs/EnvironmentCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "redirect"
+          ],
+          "properties": {
+            "redirect": {
+              "$ref": "#/$defs/RedirectCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "analyzerFact"
+          ],
+          "properties": {
+            "analyzerFact": {
+              "$ref": "#/$defs/AnalyzerFactCoordinate"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NonRedirectPathCoordinateSelector": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "argument"
+          ],
+          "properties": {
+            "argument": {
+              "$ref": "#/$defs/PositionalCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "optionValue"
+          ],
+          "properties": {
+            "optionValue": {
+              "$ref": "#/$defs/OptionValueCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "environment"
+          ],
+          "properties": {
+            "environment": {
+              "$ref": "#/$defs/EnvironmentCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "analyzerFact"
+          ],
+          "properties": {
+            "analyzerFact": {
+              "$ref": "#/$defs/AnalyzerFactCoordinate"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PathPolicy": {
+      "type": "object",
+      "required": [
+        "coordinate"
+      ],
+      "properties": {
+        "coordinate": {
+          "$ref": "#/$defs/PathCoordinateSelector"
+        },
+        "exact": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "within": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "outside": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "any": {
+          "const": true
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "exact"
+          ]
+        },
+        {
+          "required": [
+            "within"
+          ]
+        },
+        {
+          "required": [
+            "outside"
+          ]
+        },
+        {
+          "required": [
+            "any"
+          ]
+        }
+      ]
+    },
+    "NonRedirectPathPolicy": {
+      "type": "object",
+      "required": [
+        "coordinate"
+      ],
+      "properties": {
+        "coordinate": {
+          "$ref": "#/$defs/NonRedirectPathCoordinateSelector"
+        },
+        "exact": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "within": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "outside": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "any": {
+          "const": true
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "exact"
+          ]
+        },
+        {
+          "required": [
+            "within"
+          ]
+        },
+        {
+          "required": [
+            "outside"
+          ]
+        },
+        {
+          "required": [
+            "any"
+          ]
+        }
+      ]
+    },
+    "RedirectPathPolicy": {
+      "type": "object",
+      "required": [
+        "coordinate"
+      ],
+      "properties": {
+        "coordinate": {
+          "type": "object",
+          "required": [
+            "redirect"
+          ],
+          "properties": {
+            "redirect": {
+              "$ref": "#/$defs/RedirectCoordinate"
+            }
+          },
+          "additionalProperties": false
+        },
+        "exact": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "within": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "outside": {
+          "$ref": "#/$defs/AbsoluteLexicalPath"
+        },
+        "any": {
+          "const": true
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "exact"
+          ]
+        },
+        {
+          "required": [
+            "within"
+          ]
+        },
+        {
+          "required": [
+            "outside"
+          ]
+        },
+        {
+          "required": [
+            "any"
+          ]
+        }
+      ]
+    },
+    "EnvironmentTest": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "value": {
+          "$ref": "#/$defs/StringValueSelector"
+        },
+        "prefix": {
+          "type": "boolean"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EnvironmentPolicy": {
+      "type": "object",
+      "required": [
+        "name",
+        "prefix",
+        "occurrence"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "value": {
+          "$ref": "#/$defs/StringValueSelector"
+        },
+        "prefix": {
+          "type": "boolean"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EnvironmentMatcher": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/EnvironmentTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/EnvironmentTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "EnvironmentCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/EnvironmentPolicy"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RedirectEntry": {
+      "type": "object",
+      "required": [
+        "sourceFd",
+        "operator",
+        "occurrence",
+        "target"
+      ],
+      "properties": {
+        "sourceFd": {
+          "$ref": "#/$defs/FdSelector"
+        },
+        "operator": {
+          "enum": [
+            "<",
+            ">",
+            ">>",
+            ">&",
+            "<&"
+          ]
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "kind"
+          ],
+          "properties": {
+            "kind": {
+              "enum": [
+                "literalPath",
+                "fd",
+                "parameterPath"
+              ]
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  "<"
+                ]
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "literalPath"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operator": {
+                "enum": [
+                  ">&",
+                  "<&"
+                ]
+              }
+            },
+            "required": [
+              "operator"
+            ]
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "const": "fd"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "operator"
+            ],
+            "properties": {
+              "operator": {
+                "enum": [
+                  ">",
+                  ">>"
+                ]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "enum": [
+                      "literalPath",
+                      "parameterPath"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "RedirectCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/RedirectEntry"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RedirectPathCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/RedirectPathPolicy"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "RedirectPolicy": {
+      "type": "object",
+      "required": [
+        "redirects",
+        "paths"
+      ],
+      "properties": {
+        "redirects": {
+          "$ref": "#/$defs/RedirectCoverage"
+        },
+        "paths": {
+          "$ref": "#/$defs/RedirectPathCoverage"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RedirectPolicyOverride": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "const": "inherit"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "extend",
+                "replace"
+              ]
+            },
+            "policies": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/PolicyIdentifier"
+              }
+            },
+            "inline": {
+              "$ref": "#/$defs/RedirectPolicy"
+            }
+          },
+          "additionalProperties": false,
+          "anyOf": [
+            {
+              "required": [
+                "policies"
+              ]
+            },
+            {
+              "required": [
+                "inline"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "RedirectTest": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "operator": {
+          "enum": [
+            "<",
+            ">",
+            ">>",
+            ">&",
+            "<&"
+          ]
+        },
+        "sourceFd": {
+          "$ref": "#/$defs/FdSelector"
+        },
+        "targetKind": {
+          "enum": [
+            "literalPath",
+            "fd",
+            "parameterPath"
+          ]
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "RedirectMatcher": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/RedirectTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/RedirectTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PathsMatcher": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/PathPolicy"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/PathPolicy"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "PathsCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/NonRedirectPathPolicy"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "FactTest": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "analyzer": {
+          "$ref": "#/$defs/AnalyzerId"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "$ref": "#/$defs/PolicyIdentifier"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        },
+        "value": {
+          "$ref": "#/$defs/TypedValueSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FactPolicy": {
+      "type": "object",
+      "required": [
+        "analyzer",
+        "version",
+        "name",
+        "occurrence",
+        "value"
+      ],
+      "properties": {
+        "analyzer": {
+          "$ref": "#/$defs/AnalyzerId"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "$ref": "#/$defs/PolicyIdentifier"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        },
+        "value": {
+          "$ref": "#/$defs/TypedValueSelector"
+        }
+      },
+      "additionalProperties": false
+    },
+    "FactsMatcher": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/FactTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/FactTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "FactsCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/FactPolicy"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Relation": {
+      "enum": [
+        "chain",
+        "pipeline",
+        "wrapper",
+        "command-substitution",
+        "analyzer-command"
+      ]
+    },
+    "NestedPartTest": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "relation": {
+          "$ref": "#/$defs/Relation"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Identifier"
+            },
+            {
+              "const": "none"
+            }
+          ]
+        },
+        "classification": {
+          "enum": [
+            "complete",
+            "parameter",
+            "opaque",
+            "invalid"
+          ]
+        },
+        "verdict": {
+          "enum": [
+            "allow",
+            "ask",
+            "deny"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "NestedPartPolicy": {
+      "type": "object",
+      "required": [
+        "relation",
+        "occurrence",
+        "profile",
+        "classification",
+        "verdict"
+      ],
+      "properties": {
+        "relation": {
+          "$ref": "#/$defs/Relation"
+        },
+        "occurrence": {
+          "$ref": "#/$defs/OccurrenceSelector"
+        },
+        "profile": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Identifier"
+            },
+            {
+              "const": "none"
+            }
+          ]
+        },
+        "classification": {
+          "enum": [
+            "complete",
+            "parameter",
+            "opaque",
+            "invalid"
+          ]
+        },
+        "verdict": {
+          "enum": [
+            "allow",
+            "ask",
+            "deny"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "NestedPartsMatcher": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "any"
+          ],
+          "properties": {
+            "any": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/NestedPartTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/NestedPartTest"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "NestedPartsCoverage": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "none"
+          ],
+          "properties": {
+            "none": {
+              "const": true
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "all"
+          ],
+          "properties": {
+            "all": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/NestedPartPolicy"
+              }
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "OrdinaryMatch": {
+      "type": "object",
+      "minProperties": 1,
+      "properties": {
+        "arguments": {
+          "$ref": "#/$defs/ArgumentsMatcher"
+        },
+        "options": {
+          "$ref": "#/$defs/OptionsMatcher"
+        },
+        "environment": {
+          "$ref": "#/$defs/EnvironmentMatcher"
+        },
+        "redirects": {
+          "$ref": "#/$defs/RedirectMatcher"
+        },
+        "paths": {
+          "$ref": "#/$defs/PathsMatcher"
+        },
+        "facts": {
+          "$ref": "#/$defs/FactsMatcher"
+        },
+        "nestedParts": {
+          "$ref": "#/$defs/NestedPartsMatcher"
+        },
+        "classification": {
+          "enum": [
+            "complete",
+            "parameter",
+            "opaque",
+            "invalid"
+          ]
+        },
+        "raw": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      },
+      "additionalProperties": false
+    },
+    "AllowMatch": {
+      "type": "object",
+      "required": [
+        "arguments",
+        "options",
+        "environment",
+        "paths",
+        "facts",
+        "nestedParts"
+      ],
+      "properties": {
+        "classification": {
+          "enum": [
+            "complete",
+            "parameter"
+          ]
+        },
+        "arguments": {
+          "$ref": "#/$defs/ArgumentsCoverage"
+        },
+        "options": {
+          "$ref": "#/$defs/OptionsCoverage"
+        },
+        "environment": {
+          "$ref": "#/$defs/EnvironmentCoverage"
+        },
+        "paths": {
+          "$ref": "#/$defs/PathsCoverage"
+        },
+        "facts": {
+          "$ref": "#/$defs/FactsCoverage"
+        },
+        "nestedParts": {
+          "$ref": "#/$defs/NestedPartsCoverage"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AllowRule": {
+      "type": "object",
+      "required": [
+        "id",
+        "action",
+        "match"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "action": {
+          "const": "allow"
+        },
+        "match": {
+          "$ref": "#/$defs/AllowMatch"
+        },
+        "redirectPolicy": {
+          "$ref": "#/$defs/RedirectPolicyOverride"
+        },
+        "expansions": {
+          "$ref": "#/$defs/ExpansionPermissions"
+        }
+      },
+      "additionalProperties": false
+    },
+    "AskDenyRule": {
+      "type": "object",
+      "required": [
+        "id",
+        "action",
+        "match"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "action": {
+          "enum": [
+            "ask",
+            "deny"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "match": {
+          "$ref": "#/$defs/OrdinaryMatch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Rule": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AllowRule"
+        },
+        {
+          "$ref": "#/$defs/AskDenyRule"
+        }
+      ]
+    },
+    "Hint": {
+      "type": "object",
+      "required": [
+        "id",
+        "message"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "match": {
+          "$ref": "#/$defs/OrdinaryMatch"
+        }
+      },
+      "additionalProperties": false
+    },
+    "OptionSpec": {
+      "type": "object",
+      "required": [
+        "aliases",
+        "arity"
+      ],
+      "properties": {
+        "aliases": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32
+          }
+        },
+        "arity": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4
+        },
+        "inline": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "arity": {
+                "not": {
+                  "const": 1
+                }
+              }
+            },
+            "required": [
+              "arity"
+            ]
+          },
+          "then": {
+            "properties": {
+              "inline": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "AnalyzerId": {
+      "enum": [
+        "generic-v1",
+        "sed-v1",
+        "export-v1",
+        "xargs-v1"
+      ]
+    },
+    "Profile": {
+      "type": "object",
+      "required": [
+        "id",
+        "executables",
+        "options",
+        "rules"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/Identifier"
+        },
+        "executables": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "options": {
+          "type": "object",
+          "propertyNames": {
+            "$ref": "#/$defs/PolicyIdentifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/OptionSpec"
+          }
+        },
+        "pathSources": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/NonRedirectPathCoordinateSelector"
+          }
+        },
+        "redirectPolicy": {
+          "$ref": "#/$defs/RedirectPolicyOverride"
+        },
+        "analyzer": {
+          "$ref": "#/$defs/AnalyzerId"
+        },
+        "rules": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {
+            "$ref": "#/$defs/Rule"
+          }
+        },
+        "fallbackHints": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/Hint"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Defaults": {
+      "type": "object",
+      "required": [
+        "action",
+        "redirectPolicy"
+      ],
+      "properties": {
+        "action": {
+          "const": "ask"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "redirectPolicy": {
+          "$ref": "#/$defs/PolicyIdentifier"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Limits": {
+      "type": "object",
+      "description": "Per-document limits default to engine maxima. For repeatable --config, each effective limit is the minimum across files; configBytes bounds the sum of original file bytes and profile/rule caps bound the assembled policy. Evidence/diagnostic caps retain their normal evaluation scope.",
+      "properties": {
+        "configBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 262144
+        },
+        "profiles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "rules": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4096
+        },
+        "evidenceItems": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "diagnosticsBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        }
+      },
+      "additionalProperties": false
+    },
+    "Config": {
+      "type": "object",
+      "description": "One complete, independently valid v2 policy document. Repeatable --config assembles disjoint profile IDs and executable spellings, requires equal decoded defaults, and shares redirect-policy names only for identical decoded definitions. Rule and hint IDs remain profile-local. Cross-file references are not supported.",
+      "$comment": "Input-set constraints (canonical-path uniqueness, source conflicts, aggregate budgets, atomic activation) require checker semantic validation; this schema validates each individual document. See spec/shell-warden/06-engine-config.md section 6.1.1 and ADR-0024.",
+      "required": [
+        "version",
+        "defaults",
+        "redirectPolicies",
+        "profiles"
+      ],
+      "properties": {
+        "version": {
+          "const": 3
+        },
+        "defaults": {
+          "$ref": "#/$defs/Defaults"
+        },
+        "limits": {
+          "$ref": "#/$defs/Limits"
+        },
+        "redirectPolicies": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "$ref": "#/$defs/PolicyIdentifier"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/RedirectPolicy"
+          }
+        },
+        "profiles": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/Profile"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "VariableName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "VariableNames": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/VariableName"
+      }
+    },
+    "ExpansionPermissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "arguments": {
+          "$ref": "#/$defs/VariableNames"
+        },
+        "redirectTargets": {
+          "$ref": "#/$defs/VariableNames"
+        },
+        "assignmentValues": {
+          "$ref": "#/$defs/VariableNames"
+        }
+      }
+    }
+  }
+}

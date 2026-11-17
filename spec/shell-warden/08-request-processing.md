@@ -1,6 +1,8 @@
 # 08 — Decision Pipeline (checker) & Hook Application
 
-Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+Version 3.0 · 2026-11-17 · Active v3 behavior is defined by
+[ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
+[12 — Contextual parameters](12-contextual-parameters.md). The earlier v2-only transition followed
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33): rules vote inside the
 binary and reduce by the fixed lattice; there is no refinement phase, first-match semantics,
@@ -52,7 +54,9 @@ emits its vote.
 
 ## 8.3 Rules, votes, and reduction
 
-1. **Ask/deny**: every rule whose ordinary predicates hold (06 §6.6) emits one vote.
+1. **Ask/deny**: complete ordinary predicates evaluate in three values (12 §12.5).
+   Match emits a vote; no-match has no effect; unknown establishes a part-local ask
+   floor without a matched vote. Known false conjuncts and true alternatives remain decisive.
 2. **Allow**: an allow rule passes two phases — its `match` selectors hold for the evidence,
    AND the coverage proof (06 §6.7) holds: every observed security-relevant item (positional
    arguments INCLUDING resolvability, every option occurrence and consumed value, every
@@ -63,7 +67,9 @@ emits its vote.
    unselected repeated occurrence does not qualify. A rejected allow emits NO vote and
    records its stable coverage reason codes (07 §7.3).
 3. **Per-part reduction** by the fixed lattice `allow < ask < deny`; no emitted vote ⇒
-   ask. There is no numeric priority, no first-match or last-match behavior, no refinement
+   ask. A restrictive unknown floor prevents allow but not a conclusive deny.
+   Unknown allow proofs emit no vote and do not veto other allows.
+   There is no numeric priority, no first-match or last-match behavior, no refinement
    phase, and no configuration-order meaning.
 4. **Part message**: when a vote wins, the per-part deciding rule is the rule with the
    lexicographically smallest UTF-8 byte sequence among that action's emitted votes; its `message` (if any)
@@ -101,10 +107,9 @@ coverage obligations independent of which rules happen to match.
    `deny > ask > allow`; no participating part ⇒ ask.
 3. **Evidence state (per command)**: `invalid` when any participating part is `invalid` or
    the evidence-items cap overflowed; else `opaque` when any participating part is `opaque`;
-    else `complete`. Historical verdict v1 mapped `complete` to `static` and both `opaque` and
-    `invalid` to `opaque`. The active v2 contract maps `complete` → `static`,
-   `opaque` → `opaque`, and `invalid` → `invalid`. `match` is `argv` only for
-   complete/static evidence and `raw` otherwise.
+    else `parameter` when any participating part is parameter; else `complete`.
+    V3 maps complete to `static/argv`, parameter to `parameter/expression`,
+    opaque to `opaque/raw`, and invalid to `invalid/raw` (12 §12.2).
 4. **Invalid-evidence ask floor**: an invalid command MUST be at least ask and
    MUST NEVER allow. When no ordinary rule emits a vote, it is a bare ask and
    MUST omit `ruleId`. Retained typed evidence or raw text MAY match ordinary ask
@@ -122,29 +127,31 @@ coverage obligations independent of which rules happen to match.
       the maps/lists MUST NOT change a verdict, an optional aggregate message, or the resolved canonical
      redirect-policy set. Messages and rule ids use lexicographic selection exactly so that
      this holds.
-   - ADDING a matching allow rule MUST NOT lower any result: it only adds an allow vote, and
-     an existing ask or deny remains dominant.
+    - ADDING an allow rule MUST NOT lower an established ask/deny vote or
+      restrictive uncertainty floor. A first qualifying allow may replace a bare
+      default ask; a failed unknown allow proof does not veto another allow.
    - NO priority, refinement, order-dependence, or rule-count-dependence semantics exist;
      verdicts are independent of the notation used to write them.
 
 ## 8.7 Diagnostics facts (bounded only after the decision)
 
 Diagnostics are computed in full before bounds are applied. Per command, the serialized
-`facts` object (02 §2.8, ≤ `limits.diagnosticsBytes`) records:
+full `facts` object (02 §2.10, selected by `limits.diagnosticsBytes`) records:
 
 | Key | Contents |
 |---|---|
-| `evidence` | the command's evidence state: `complete` \| `opaque` \| `invalid` |
+| `evidence` | the command's evidence state: `complete` \| `parameter` \| `opaque` \| `invalid` |
 | `reasons` | stable reason codes seen in the graph, sorted and deduplicated by UTF-8 bytes before any bounded selection |
 | `selectedProfiles` | profile ids selected by non-collapsed, non-dead parts, in part order |
-| `matched` | ids of every rule whose selectors held (sorted by UTF-8 bytes, deduplicated) |
+| `matched` | conclusive ordinary predicate matches; for allow, profile/explicit-classification-eligible proof attempts before coverage (sorted, unique). Unknown restrictions are not matched votes. |
 | `qualified` | ids of allow rules whose coverage proof passed |
 | `rejected` | one canonical object `{ "ruleId": id, "reasons": [stable coverage codes] }` per rejected allow rule ID; each object carries all its coverage codes sorted and deduplicated by UTF-8 bytes |
 | `votes` | emitted vote strings `"{action}:{ruleId}"` in evaluation order. Default asks are not votes. |
+| `uncertain` | canonical restrictive-rule IDs and responsible predicate coordinates (12 §12.6); uncertainty is not a matched vote |
 
 For full diagnostics, `votes` records only emitted votes. Each part without an emitted vote
 defaults to ask, so a command may be ask even when all recorded votes are allow. A command
-verdict is never less restrictive than any emitted vote. A full static/argv/allow command
+verdict is never less restrictive than an emitted vote or restrictive uncertainty floor. Any full allow command
 MUST contain at least one emitted allow vote. When present, `ruleId` MUST be the
 UTF-8-byte-order smallest emitted vote whose action matches the command verdict; a default
 ask with no emitted ask vote MUST omit it.
@@ -159,10 +166,10 @@ When the serialized facts exceed `diagnosticsBytes`, the bounded fallback keeps
 `evidence`, a deterministic `reasons` subset, and a `diagnostics` marker value
 `truncated-after-decision`; truncation only ever happens AFTER the decision was
 computed and never affects it. If the full reason set has at most eight entries,
-the bounded reasons are the full sorted set. Otherwise, retain exactly one evidence
-anchor: `complete` for complete evidence, `opaque-expansion` for opaque evidence,
-or the UTF-8-byte-order lowest invalid-cause reason for invalid evidence. Fill the
-remaining seven slots with the UTF-8-byte-order lowest other reasons, then sort the
+the bounded reasons are the full sorted set. Otherwise, retain the evidence
+anchor: `complete`, `parameter-expansion`, `opaque-expansion`,
+or the UTF-8-byte-order lowest invalid cause, according to evidence. Also reserve
+`predicate-unknown` when present. Fill the remaining slots with the UTF-8-byte-order lowest other reasons, then sort the
 selected unique entries by UTF-8 bytes. The bounded reasons array MUST contain no
 more than eight entries.
 
@@ -183,10 +190,10 @@ The hook applies the verdict per ADR-0013 reply automation (03 §3.2):
 6. Tighten-only (I5): an allow reply applies only to a request whose checker verdict was
    allow; an existing native deny is unreachable here and is never loosened.
 
-## 8.9 Verdict v2 serialization and aggregate consistency
+## 8.9 Verdict v3 serialization and aggregate consistency
 
-The new checker MUST serialize only the closed v2 envelope in 02 §2.7. It MUST
-emit static/argv with allow, ask, or deny; opaque/raw with ask or deny; and
+The checker MUST serialize only the closed v3 envelope in 02 §2.10 and 12 §12.6. It MUST
+emit static/argv or parameter/expression with allow, ask, or deny; opaque/raw with ask or deny; and
 invalid/raw with ask or deny. Every other combination is invalid. Invalid evidence
 establishes an ask floor and MUST NEVER allow. When no ordinary rule emits a vote,
 it produces a bare ask without `ruleId`. Retained typed evidence or raw text MAY
@@ -194,7 +201,7 @@ match ordinary ask or deny rules. An emitted ask vote yields ask with the
 deterministic `ruleId` selection of §8.6; deny remains dominant. Opaque evidence
 MUST NOT allow.
 
-Before serialization the checker MUST validate v2 output against the expected
+Before serialization the checker MUST validate v3 output against the expected
 letter invocation ID and positional indexes. Validation includes indexes equal to
 their array positions in both letter and verdict; recognized full or truncated
 diagnostic key sets with well-formed members; stable 07 §7.3 reason codes;
@@ -203,7 +210,7 @@ KiB facts and depth-8 caps; and the 64 KiB verdict cap. Consumers MUST additiona
 verify those coverage and semantic invariants after schema validation, including
 that the aggregate equals the most-restrictive command verdict. Any
 serialization or aggregate failure is a checker anomaly and takes `onCheckerError`
-through the hook; malformed v2 MUST NOT be retried as v1.
+through the hook; malformed or retired envelopes MUST NOT be retried by another parser.
 
 Verdict v1 output is historical only and MUST NOT be parsed, translated, or used
 as fallback by the active hook.
