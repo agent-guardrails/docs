@@ -1,6 +1,6 @@
 # 10 — Testing Strategy
 
-Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+Version 2.5 · 2026-11-17 · Revised for Bash execution regressions and verdict v2 only per
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33): draft-2020-12 schema
 fixtures, golden checker coverage, profile-driven scenario/property tests, and the hook contract
@@ -67,6 +67,14 @@ negative case. Spawn latency is recorded per case (§10.6).
 | `xargs rm -rf /` with `xargs-v1` and a nested `rm` profile denying exact `["/"]` + its recursive-force option | `deny` via the `analyzer-command` nested part joining the lattice |
 | `git status; git push --force` (chain in one raw) | split into parts; the `rm`-like deny part dominates the aggregate; parts recorded in `facts` diagnostics |
 | `bash -c 'git push --force'` on twinned git rules | wrapper unwrapped (07 §7.2); same verdicts as the direct command |
+| `BASH_ENV=/tmp/inject.sh bash -c 'approved'`, including `env` and nested wrapper forms | opaque participating interpreter; never allow even if assignment string coverage matches |
+| `BASH_ENV=/tmp/inject.sh; bash -c 'approved'` | assignment-only segment remains participating; aggregate at least ask |
+| `bash /approved/task.sh safe` with the exact file profile | allow only with complete argument and inherited environment/redirect coverage; script content is never read |
+| `bash /untrusted/task.sh -c approved` | the script path remains the child head; no command-string reinterpretation |
+| Relative/dynamic script operand, startup flags, stdin mode, `bash -c approved ignored` | opaque parent; supported command-string children still emit restrictive votes |
+| Quoted empty script argument | retained at its original position and included in exact coverage |
+| Quoted/escaped digit immediately before a redirect | retained as a script argument; redirect uses the default FD; covered redirect policy cannot mask an uncovered argument |
+| Wrapper redirects and repeated inherited/`env` assignments | observations survive extraction with distinct one-based ordinals; uncovered items block allow |
 | reorder profiles, rules, options, hints, or policy entries | verdicts unchanged (reorder-invariance property test, 08 §8.6) |
 | add a matching allow where an ask already emits | still `ask` — an added allow cannot lower the lattice result |
 | rules file with a non-`ask` `defaults.action` | config invalid, exit 2, checker degrades — never fail-open |

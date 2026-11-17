@@ -56,6 +56,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) | Shell Warden verdict v2 only | Accepted, current decision |
 | [0024](https://github.com/agent-guardrails/docs/blob/main/adr/0024-disjoint-shell-warden-config-assembly.md) | Disjoint explicit shell-warden configuration assembly | Accepted, current decision |
 | [0025](https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md) | Exact executable lists with same-name installation paths | Accepted design; implementation pending |
+| [0026](https://github.com/agent-guardrails/docs/blob/main/adr/0026-bounded-bash-script-execution.md) | Bounded Bash script execution and opaque startup context | Accepted; coordinated implementation in https://github.com/agent-guardrails/shell-warden/issues/74 |
 
 ## Conventions
 

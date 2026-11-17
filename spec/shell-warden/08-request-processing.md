@@ -1,6 +1,6 @@
 # 08 — Decision Pipeline (checker) & Hook Application
 
-Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+Version 2.5 · 2026-11-17 · Revised for Bash startup evidence and verdict v2 only per
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33): rules vote inside the
 binary and reduce by the fixed lattice; there is no refinement phase, first-match semantics,
@@ -44,6 +44,10 @@ emits its vote.
    default ask, and its evidence state still contributes to the command's classification
    (§8.6).
 4. **Collapsed wrapper parts** (07 §7.2) participate only through their children.
+   Their environment and redirects MUST survive on child evidence. Bash/sh with
+   visible assignments or unmodeled positional bindings MUST retain an opaque
+   participating parent. Assignment-only segments remain participating with
+   default ask; only parts without argv, assignments, or redirects are empty.
 5. **Analyzers**: when the selected profile declares an analyzer, the analyzer inspects the
    head token and the post-option-parsing positionals and emits facts from its closed
    catalog. Only `xargs-v1` may additionally relabel an emitted child as an

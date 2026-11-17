@@ -561,6 +561,7 @@
       ]
     },
     "EnvironmentCoverage": {
+      "$comment": "Coverage applies to preserved assignment occurrences. It cannot authorize unmodeled Bash/sh startup context: any visible interpreter assignment retains opaque evidence (spec/shell-warden/07-command-parsing.md section 7.2).",
       "oneOf": [
         {
           "type": "object",
@@ -1012,6 +1013,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/Identifier" },
         "executables": {
+          "$comment": "Exact decoded executable heads also select literal absolute script children from supported Bash file invocations. A script path grants no trust to other spellings or unchecked arguments; no script content or filesystem lookup participates (spec/shell-warden/07-command-parsing.md section 7.2).",
           "type": "array",
           "minItems": 1,
           "maxItems": 8,

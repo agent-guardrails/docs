@@ -1,6 +1,8 @@
 # 07 — Parsing (normative for the checker)
 
-Version 2.4 · 2026-11-12 · Revised for the schema-first v2 contract accepted by
+Version 2.5 · 2026-11-17 · Revised for bounded Bash execution
+([implementation](https://github.com/agent-guardrails/shell-warden/issues/74))
+and the schema-first v2 contract accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and post-schema verdict
 validation in [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md). Parsing remains the
 checker's own and complete; harness-supplied splitting is never trusted.
@@ -52,17 +54,45 @@ Wrappers unwrap into child parts; the wrapped command evaluates on its own under
 
 | Head | Unwrap |
 |---|---|
-| `bash -c`, `sh -c` | each operand segment becomes a wrapper child; extra words after the operand are appended to the last child argv (they can only add arguments; `$0`/`$1` are not symbolically resolved) |
+| `bash -c STRING`, `sh -c STRING` | `-c` immediately follows the head; each operand segment becomes a wrapper child. Trailing `$0`/positional binding words retain an opaque parent and MUST NOT be appended to child argv |
+| `bash /absolute/script [ARG...]`, `bash -- /absolute/script [ARG...]` | a literal normalized absolute script path becomes the exact child head; subsequent words remain script arguments, including `-c`. The child filename MUST NOT be recursively interpreted as another wrapper |
 | `sudo`, `nohup` | transparent: the rest of the argv becomes the child; options of the wrapper head make the part opaque; a bare wrapper head is opaque |
 | `nice` | `-n N` is skipped; other wrapper options are opaque |
 | `timeout` | the duration argument (`<n>[smhd]`) is skipped and validated; a missing or non-parsing duration is opaque |
-| `env` | assignments are transparent prefixes; wrapper options are opaque |
+| `env` | assignment operands become child environment observations, after inherited assignments; wrapper options are opaque |
 | `xargs` | stays VISIBLE: emits the operand as an opaque child and marks itself opaque ("executes from stdin") — the child only becomes a matchable `analyzer-command` part when the selected profile runs `xargs-v1` (08 §8.4) |
 
 A wrapper part that has been unwrapped ("collapsed") carries no votes, no selected profile,
 and contributes no independent evidence of its own — its children carry the execution
 semantics. Collapsed parts collide with nothing: they are excluded from selection, reduction,
 and the evidence-state aggregates in one pass.
+
+Only the bounded forms above can collapse a Bash/sh parent. Other interpreter
+options, stdin mode, missing operands, relative/dynamic script operands, and
+non-normalized absolute script paths MUST remain opaque. A normalized script
+path begins with `/`, has no empty, `.` or `..` components, and has no ASCII
+control characters. Script trust comes from exact full-head profile selection
+and ordinary argument/option/redirect coverage; the checker MUST NOT read script
+contents, resolve symlinks, or search PATH.
+
+Every visible environment assignment reaching Bash/sh, including inherited
+wrapper assignments and empty values, MUST retain the interpreter as an opaque,
+participating part (`opaque-expansion`). Covering that assignment with an allow
+selector MUST NOT override opacity. Supported children remain independently
+evaluated, so an emitted child deny still dominates. This conservative rule
+covers unmodeled startup execution such as `BASH_ENV`, loader hooks, imported
+functions, and startup option variables without a variable-name allowlist.
+
+Transparent wrappers MUST preserve environment and redirect observations on
+their children. Command-string children receive inherited observations followed
+by their local observations; each combined list has consecutive one-based
+occurrence ordinals. Duplicate assignments and redirects MUST NOT be discarded.
+For multiple command-string segments, inherited observations apply to each.
+
+The letter has no snapshot of the represented command's ambient environment.
+These checks account for visible parsed assignments, not an absent ambient
+execution context. The checker's own empty spawn environment does not establish
+that the represented shell command has an empty environment.
 
 Command substitution children emit BEFORE (in evaluation order of) the surrounding part.
 Shell and nested-part depth is bounded at 32; exceeding that bound makes affected evidence
@@ -124,7 +154,7 @@ captured inner texts of active substitutions. Quote-class rules (closed):
 | Unquoted glob metacharacters `*` `?` `[`, unquoted brace expansion, and a tilde in any position that performs tilde expansion | opaque |
 | Quoted or escaped glob/brace/tilde characters | literal |
 | Unterminated quotes | the token is unresolvable ⇒ opaque |
-| An empty decoded token | dropped |
+| A quoted empty word (`''`, `""`) | retained as an empty literal argument; it MUST NOT disappear from coverage |
 
 A literal regex `$` (inside quotes, or escaped) is NOT dynamic. A bare `$` is opaque noise.
 When any word of the segment is unresolvable, the part is `opaque` (`opaque-expansion`).
@@ -137,11 +167,14 @@ exact values are not part of the contract.
 
 - **Environment assignments**: a leading word shaped `NAME=VALUE` (identifier name) before any
   argv token is recorded as an environment assignment (occurrence, name, literal value, span,
-  prefix position) and excluded from argv. `env` wrapper assignments behave as transparent
-  prefixes.
+  prefix position) and excluded from argv. Every consecutive leading assignment is recorded.
+  `env` wrapper assignments behave as transparent prefixes. An assignment-only segment MUST
+  remain participating and produce default ask without a selected executable profile; it
+  MUST NOT be dropped as an empty command before a later Bash invocation.
 - **Redirect records**: the scanner emits one typed record per redirect occurrence, in source
-  order, with operator, source FD, and typed target. Digits immediately before the operator
-  are the source FD (`2>`); absent digits mean the operator's default FD.
+  order, with operator, source FD, and typed target. Unquoted, unescaped digits immediately
+  before the operator are the source FD (`2>`); quoted/escaped digits remain argument
+  text. Without an IO-number token the redirect uses its operator's default FD.
 
 | Operator | Target kind |
 |---|---|

@@ -1,6 +1,6 @@
 # 09 — Security: Trust Model, Invariants, Fail-Closed Matrix
 
-Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+Version 2.5 · 2026-11-17 · Revised for Bash startup evidence and verdict v2 only per
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33).
 
@@ -15,6 +15,12 @@ Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
 | Checker config (profiles file) | profiles, rules, redirect policies | user-global only (D5); project copies ignored with warning |
 | Model output | command text, tool args | **untrusted input** — the only thing the checker evaluates; its splitting of the command is never trusted (07 §7.2 — the 0014 principle) |
 | Repository content | files the model may read/edit | untrusted; MUST NOT influence policy (no project rules, no project checker path) |
+
+An explicitly configured script path is a policy trust decision, not a content
+audit or filesystem-identity proof. `bash /absolute/script` requires that exact
+child path and full argument coverage (07 §7.2). The letter does not expose the
+represented command's ambient environment; the checker's empty environment
+does not imply the target shell has the same environment.
 
 ## 9.2 Invariants (normative)
 
@@ -46,6 +52,8 @@ Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
 |---|---|---|
 | T1 | Model crafts an obfuscated command (`$(…)`, vars, unquoted globs, tilde) to slip rules | active expansion and unresolvable wrapper shapes ⇒ `opaque`; heredoc/here-string and unsupported redirects ⇒ `invalid`; either way the part cannot allow and at least one ask emits; deny/ask still match typed classification or raw text (08 §8.6) |
 | T2 | Model smuggles a chain the harness split hid (`bash -c 'curl … \| sh'`) | recursive checker-side split (07 §7.2); every sub-part evaluated; unresolvable = opaque |
+| T15 | Visible startup environment runs extra code before an approved Bash operand (`BASH_ENV=/tmp/inject.sh bash -c 'approved'`) | preserve all prefix/`env` observations through wrappers; any observed Bash/sh environment retains an opaque parent regardless of string coverage; assignment-only segments remain participating |
+| T16 | A script argument `-c approved` is mistaken for an interpreter command string | parse the interpreter invocation in order; exact absolute script child selection and argument coverage; unsupported flags/modes remain opaque |
 | T3 | Repo ships `.opencode/shell-warden` rules to widen policy | not loaded; warning logged (D5/I2 posture) |
 | T4 | Repo points the plugin at a project-local checker | checker path is user-global + absolute; validation disables plugin on violation (I2) |
 | T5 | Checker package tampering | optional `sha256` pin (I8); releases signed/tagged per release engineering |
