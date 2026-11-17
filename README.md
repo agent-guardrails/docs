@@ -47,7 +47,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0014](adr/0014-payload-shape-untrusted.md) | Payload shape is untrusted; adapter normalization (referenced on the engine side in v1) | Accepted |
 | [0015](adr/0015-engine-language-rust.md) | Decision component and reference tools in Rust | Accepted |
 | [0016](adr/0016-two-tier-enforcement.md) | Two-tier enforcement: thin hook → one-shot shell-warden decision binary (supersedes 0002/0005/0007/0008) | Accepted |
-| [0017](adr/0017-schema-first-shell-warden-config-contract.md) | Schema-first Shell Warden v2 configuration contract | Accepted |
+| [0017](adr/0017-schema-first-shell-warden-config-contract.md) | Schema-first Shell Warden v2 configuration contract | Accepted; adopted multi-spelling restriction superseded by 0025 |
 | [0018](adr/0018-script-based-auditable-pr-review-workflow.md) | Shared fixed script contracts for auditable PR review, with MCP deferred as an optional transport | Accepted |
 | [0019](adr/0019-fixed-evidence-bundle-inspection.md) | Fixed evidence bundle inspection | Accepted |
 | [0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md) | Versioned Shell Warden verdict envelope | Superseded historical provenance, see 0023 |
@@ -55,6 +55,7 @@ Knowledge base for the organization's projects: **decisions**, **specifications*
 | [0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md) | Post-schema Shell Warden verdict validation | Superseded historical provenance, see 0023 |
 | [0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) | Shell Warden verdict v2 only | Accepted, current decision |
 | [0024](https://github.com/agent-guardrails/docs/blob/main/adr/0024-disjoint-shell-warden-config-assembly.md) | Disjoint explicit shell-warden configuration assembly | Accepted, current decision |
+| [0025](https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md) | Exact executable lists with same-name installation paths | Accepted design; implementation pending |
 
 ## Conventions
 

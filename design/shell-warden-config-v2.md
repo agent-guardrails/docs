@@ -3,6 +3,11 @@
 Status: accepted design direction
 Ticket: https://github.com/agent-guardrails/docs/issues/21
 Decision: https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md
+Executable-spelling revision: https://github.com/agent-guardrails/docs/issues/46
+and https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md.
+That revision is selected design, not yet shipped. Its detailed contract and
+coordinated implementation plan are in
+https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-executable-spellings.md.
 Provenance: reviewed edits from
 https://github.com/agent-guardrails/docs/issues/15 are retained and refined
 here. This design supersedes the direction proposed in
@@ -64,25 +69,34 @@ repeated fixed-arity options, for example `--file a --file b`, rather than one
 `--files` occurrence that consumes an open-ended token sequence. This keeps the
 option boundary unambiguous. Profiles never share option grammars.
 
-A singleton `executables` list is always valid. Several spellings may occur only
-when the complete set equals one entry in an implementation-owned, versioned
-lexical alias catalog. Such an entry asserts identical option grammar and
-analyzer behavior; it does not assert resolved binary identity. Unrelated
-executables require separate profiles even when their current rules look
-similar. Validation is therefore machine-checkable without filesystem or PATH
-lookup, executable selection remains unique, and profile order is irrelevant.
+Every `executables` list contains 1–8 explicit bare names or normalized absolute
+paths. The distinct case-sensitive basename set is either a singleton or one
+complete entry of the implementation-owned, versioned alias catalog. Retain the
+`node`/`nodejs` and `python`/`python3` groups as validation data in that one
+predicate, not as a separate execution mode.
+
+Selection still requires exact membership of the full decoded head. Its basename
+drives structural extraction and selected-profile analysis, but never grants a
+profile. This asserts modeled grammar compatibility, not resolved binary
+identity. Unrelated names need separate profiles. Validation remains possible
+without filesystem or PATH lookup, ownership is unique by full spelling, and
+profile order is irrelevant. The lexical bounds and breaking disposition are in
+the [executable-spelling design](https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-executable-spellings.md).
 
 ```text
 raw shell text
      |
      v
-shell parser and recursive executable-part extractor
+shell scanner and recursive structural extraction using lexical basenames
       |
       v
-recursive profile option parsing, analyzer facts, and analyzer-command parts
+retained executable parents and children
       |
       v
-complete recursive part and evidence graph
+exact profile selection, option parsing, and analyzer facts/command parts
+      |
+      v
+complete recursive graph with every executable parent retained
       |
       v
 policy resolution -> local predicate satisfaction -> allow coverage validation
@@ -159,8 +173,10 @@ drift; it never rewrites protocol semantics.
 ## Parsing, parts, and evidence states
 
 The checker parses raw shell syntax before profile selection and does not trust a
-harness split. It recursively extracts executable parts from the following
-closed relation enum:
+harness split. Structural wrapper extraction uses the literal head's lexical
+basename, not its full path, and never grants a profile. Analyzers run only after
+exact selection and use the same derived name. It recursively extracts executable
+parts from the following closed relation enum:
 
 `chain`, `pipeline`, `wrapper`, `command-substitution`, `analyzer-command`.
 
@@ -168,6 +184,13 @@ The ordinary shell parser emits only the first four relations. An analyzer may
 emit only `analyzer-command`; this prevents analyzers from duplicating ordinary
 shell nesting. Every part retains raw source text, span, quote/syntax classes,
 parent ID, relation, and relation occurrence ordinal.
+
+Every executable wrapper retains its own selection, evidence, and votes.
+Children do not authorize their parent. The prior transparent/collapsed-parent
+exemption is removed for bare and absolute spellings alike; an unselected
+wrapper contributes ask rather than disappearing, while its children still
+participate. Unknown or unsupported forms remain unable to allow, and all
+recursive evidence stays subject to budgets.
 
 Evidence is always exactly one of these states:
 
@@ -301,6 +324,14 @@ names, value types, and whether a fact is safety-relevant. Validation consults
 these tables. An unknown analyzer, incompatible analyzer/profile combination, or
 unknown fact reference invalidates config. Safety relevance is catalog metadata,
 not configurable; each emitted safety-relevant fact needs allow coverage.
+
+Validate compatibility against every basename in the profile. All enrolled
+installation paths receive the same command-specific analysis: `sed-v1` accepts
+only `sed`, `xargs-v1` only `xargs`, and `export-v1` the bare builtin `export`.
+The modeled builtin has no filesystem-path alias. `generic-v1` does not disable
+closed wrapper extraction. Analyzer dispatch and wrapper extraction consume the
+same semantic basename; neither silently skips facts or children because the
+original head was an absolute path.
 
 `generic-v1` supplies only the generic evidence described above. `sed-v1` can
 emit closed execution-primitive and program-form facts. `export-v1` can emit
@@ -984,11 +1015,13 @@ Match
 
 Semantic validation includes:
 
-- Profile aliases are unique across profiles. A multi-spelling `executables`
-  list equals one complete entry in the implementation-owned versioned lexical
-  alias catalog; a singleton needs no catalog entry. Option aliases are unique
-  inside a profile. Inline option values are available only for arity one;
-  arities two through four consume separate following tokens.
+- Full executable spellings are unique across profiles and assembled files.
+  Lists contain valid bare names or normalized absolute paths; their distinct
+  basename set is a singleton or one complete implementation-owned alias group.
+  Literal ownership, semantic analyzer compatibility, and builtin constraints
+  validate independently; singleton profiles have no validation exemption.
+  Option aliases are unique inside a profile. Inline option values are
+  available only for arity one; arities two through four consume separate tokens.
 - Every option, analyzer, fact, value type, path coordinate, relation, and
   nested profile reference exists in the relevant closed catalog.
 - `redirectPolicies` are flat named bundles with both redirect and redirect-path
@@ -1077,6 +1110,14 @@ the `invalid` evidence state without weakening the hook's closed validation.
 
 ## Version disposition
 
+The executable-spelling revision keeps the v2 shape and one execution model.
+Existing bare-name alias groups remain valid under the basename-set predicate;
+relative/irregular executable entries and incompatible analyzer bindings do not.
+Transparent wrapper parents no longer disappear from selection or voting.
+These are intentional breaking changes without opt-in flags or a legacy mode.
+The detailed [delivery plan](https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-executable-spellings.md#implementation-and-contract-synchronization)
+coordinates specs, schema, fixtures, implementation, and release notes.
+
 V1 syntax is not accepted by v2. Backward compatibility, automatic translation,
 compatibility shims, migration paths, migration tooling, deprecation periods,
 and auto-migration do not exist. A v2 checker reads v2 only.
@@ -1086,6 +1127,11 @@ priorities, order semantics, and raw-based allow are retired. V2 allow rules
 need complete typed evidence and universal coverage.
 
 ## Acceptance and rollout
+
+For the executable-spelling revision, follow the linked design's delivery plan.
+This design edit does not claim that current normative specs or binaries already
+implement it. Original-text `raw` predicates keep their spelling-sensitive
+meaning; adding a spelling requires deliberate review of those conditions.
 
 After design acceptance:
 
