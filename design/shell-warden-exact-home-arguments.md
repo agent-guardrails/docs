@@ -267,3 +267,26 @@ Required regressions:
 Validate scanner/matcher cases, checker/hook contract fixtures, schema/grammar
 consistency, and one real permission round trip. This document records the target
 design; it changes no runtime or normative schema by itself.
+
+## 8. Implementation checkpoint: source-preserving parser
+
+The first implementation slice for
+https://github.com/agent-guardrails/shell-warden/issues/69 preserves original word
+syntax and recognizes supported parameter candidates without granting permission.
+The scanner distinguishes wholly double-quoted words from assignment-value
+candidates and retains complete identifiers, literal suffixes, escapes, and
+unsupported expansions. Redirect targets share ordinary word scanning; executable
+substitutions in redirect targets remain independently evaluated parts. Empty
+literal arguments remain observed items rather than disappearing from coverage.
+
+This checkpoint does not activate the proposed `expansions` configuration.
+Parameter-dependent commands still require confirmation under the existing
+contract. It does not add parameter wire classifications, three-valued predicates,
+or a replacement hook validator. Those changes and the corresponding schema,
+fixture, and policy migration remain coordinated follow-up work in
+https://github.com/agent-guardrails/docs/issues/50 and
+https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/27.
+
+The architectural decision is recorded in
+[ADR-0026](../adr/0026-contextual-parameter-evidence.md). The active configuration
+and verdict versions remain unchanged until the coordinated replacement is ready.
