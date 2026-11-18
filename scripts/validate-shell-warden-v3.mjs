@@ -39,7 +39,7 @@ export function semanticErrors(value, expected) {
     if (evidence === "complete" && (!reasons.includes("complete") || reasons.some((r) =>
       invalid.has(r) || ["opaque-expansion", "parameter-expansion", "allow-evidence-not-complete"].includes(r)))) errors.push("complete-anchor");
     if (evidence === "parameter" && (!reasons.includes("parameter-expansion") ||
-      reasons.some((r) => invalid.has(r) || r === "opaque-expansion"))) errors.push("parameter-anchor");
+      reasons.some((r) => invalid.has(r) || ["opaque-expansion", "allow-evidence-not-complete"].includes(r)))) errors.push("parameter-anchor");
     if (evidence === "opaque" && (!reasons.includes("opaque-expansion") || reasons.some((r) => invalid.has(r)))) errors.push("opaque-anchor");
     if (evidence === "invalid" && !reasons.some((r) => invalid.has(r))) errors.push("invalid-anchor");
     if (command.verdict === "allow" && reasons.includes("predicate-unknown")) errors.push("unknown-floor");

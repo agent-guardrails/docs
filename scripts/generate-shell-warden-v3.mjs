@@ -228,6 +228,15 @@ vector("retired-v2", false, (e) => { e.protocol = "shell-warden.verdict.v2"; });
 vector("parameter-argv", false, (_e, c) => { c.match = "argv"; });
 vector("parameter-no-facts", false, (_e, c) => { delete c.facts; });
 vector("parameter-runtime-literal", false, (_e, c) => { c.facts.evidence = "complete"; c.facts.reasons = ["complete"]; });
+vector("parameter-allow-evidence-not-complete", false, (_e, c) => {
+  c.facts.reasons.unshift("allow-evidence-not-complete");
+});
+vector("parameter-allow-evidence-not-complete-truncated", false, (_e, c) => {
+  c.facts = {
+    evidence: "parameter", reasons: ["allow-evidence-not-complete", "parameter-expansion"],
+    diagnostics: "truncated-after-decision",
+  };
+});
 vector("parameter-no-allow-vote", false, (_e, c) => { c.facts.votes = []; c.facts.qualified = []; });
 vector("unknown-allow", false, (_e, c) => {
   c.facts.reasons.push("predicate-unknown");

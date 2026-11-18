@@ -129,14 +129,17 @@ captured inner texts of active substitutions. Quote-class rules (closed):
 | Unquoted glob metacharacters `*` `?` `[`, unquoted brace expansion, and a tilde in any position that performs tilde expansion | opaque |
 | Quoted or escaped glob/brace/tilde characters | literal |
 | Unterminated quotes | the token is unresolvable ⇒ opaque |
-| An empty decoded token | dropped |
+| An empty quoted literal argument (`''` or `""`) | literal, fully resolved; preserved as an observed argument |
 
 A literal regex `$` (inside quotes, or escaped) is NOT dynamic. A bare `$` is opaque noise.
 When nonliteral values all satisfy the supported parameter grammar in 12 §12.2,
 the part is `parameter`, independently of permissions. Other unresolvable content
 is `opaque` (`opaque-expansion`). Original source and quote/escape information
 MUST determine this distinction; decoded expansion markers MUST NOT be treated as
-values. Empty quoted literal arguments remain observed.
+values. Empty quoted literal arguments MUST remain observed and retain their
+positional coordinates. For `tool -- "" "$HOME"`, after option parsing the empty
+literal occupies argument index 0 and the parameter expression occupies index 1;
+coverage MUST account for both arguments.
 
 **Spans (non-normative).** Token spans are diagnostic bookkeeping only: a token's recorded end
 is its decode length from the start — they MUST NOT be consulted by decision logic, and their

@@ -192,6 +192,22 @@
       ]
     },
     {
+      "path": "invalid/parameter-allow-evidence-not-complete-truncated.json",
+      "valid": false,
+      "expectedInvocationId": "fixture:parameter",
+      "positionalIndexes": [
+        0
+      ]
+    },
+    {
+      "path": "invalid/parameter-allow-evidence-not-complete.json",
+      "valid": false,
+      "expectedInvocationId": "fixture:parameter",
+      "positionalIndexes": [
+        0
+      ]
+    },
+    {
       "path": "invalid/parameter-argv.json",
       "valid": false,
       "expectedInvocationId": "fixture:parameter",
