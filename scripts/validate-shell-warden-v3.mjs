@@ -51,6 +51,7 @@ export function semanticErrors(value, expected) {
     const rejected = new Set();
     for (const e of facts.rejected) {
       if (rejected.has(e.ruleId) || !sorted(e.reasons) || !facts.matched.includes(e.ruleId)) errors.push("rejected");
+      if (e.reasons.some((r) => !reasons.includes(r))) errors.push("rejected-reason");
       rejected.add(e.ruleId);
     }
     const votes = facts.votes.map((v) => ({ action: v.slice(0, v.indexOf(":")), id: v.slice(v.indexOf(":") + 1) }));

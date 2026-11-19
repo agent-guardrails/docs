@@ -161,6 +161,11 @@ Before serialization, `reasons` MUST be deduplicated and sorted by UTF-8 bytes.
 then emitting one entry per rule ID with that rule's complete coverage reasons
 deduplicated and sorted by UTF-8 bytes. Duplicate `ruleId` entries are invalid even
 if their JSON object properties appear in a different order.
+Every `rejected[].reasons` code MUST also appear in full `facts.reasons` and
+satisfy the same evidence-consistency requirements. In particular,
+`allow-evidence-not-complete` MUST NOT appear at either level for `complete` or
+`parameter` evidence. A rejected allow rule does not prevent another allow rule
+from qualifying when its coverage failure is compatible with the evidence state.
 
 When the serialized facts exceed `diagnosticsBytes`, the bounded fallback keeps
 `evidence`, a deterministic `reasons` subset, and a `diagnostics` marker value

@@ -215,6 +215,19 @@ function vector(name, valid, mutate) {
   fixtures.push({ path: relative, valid, expectedInvocationId: "fixture:parameter", positionalIndexes: [0] });
 }
 vector("parameter-allow", true, () => {});
+vector("parameter-allow-other-rejected", true, (_e, c) => {
+  c.facts.matched.push("other");
+  c.facts.reasons.unshift("allow-coverage-missing");
+  c.facts.rejected = [{ ruleId: "other", reasons: ["allow-coverage-missing"] }];
+});
+vector("parameter-rejected-evidence-not-complete", false, (_e, c) => {
+  c.facts.matched.push("other");
+  c.facts.rejected = [{ ruleId: "other", reasons: ["allow-evidence-not-complete"] }];
+});
+vector("parameter-rejected-coverage-not-aggregated", false, (_e, c) => {
+  c.facts.matched.push("other");
+  c.facts.rejected = [{ ruleId: "other", reasons: ["allow-coverage-missing"] }];
+});
 vector("predicate-unknown-ask", true, (e, c) => {
   e.result.verdict = c.verdict = "ask"; delete c.ruleId;
   c.facts.reasons.push("predicate-unknown");
