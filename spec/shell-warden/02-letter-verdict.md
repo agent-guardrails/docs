@@ -1,13 +1,19 @@
 # 02 — Letter & Verdict (one-shot contract)
 
-Version 2.3 · 2026-11-12 · Revised for verdict v2 only per
+Version 3.0 · 2026-11-17 · The active contract is verdict v3 under
+[ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
+[12 — Contextual parameters](12-contextual-parameters.md).
+The earlier v2-only transition followed
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33) and
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md). The letter remains v1. The released
-verdict v1 schema and earlier ADRs remain immutable historical provenance, not an active response contract.
+verdict v1/v2 schemas and earlier ADRs remain immutable historical provenance,
+not alternate active response contracts. Sections 2.7–2.9 below record the retired
+v2 contract; the active replacement is §2.10 and section 12.
 
 Schemas: [`letter v1`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.letter.v1.schema.json),
 historical [`verdict v1`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v1.schema.json),
-active [`verdict v2`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json)
+historical [`verdict v2`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v2.schema.json),
+active [`verdict v3`](https://github.com/agent-guardrails/docs/blob/main/schemas/shell-warden.verdict.v3.schema.json)
 
 Revised per [ADR-0016](../../adr/0016-two-tier-enforcement.md): the persistent NDJSON wire protocol
 is retired (supersedes ADR-0002). This document is now the complete process contract of the one-shot
@@ -122,7 +128,7 @@ fail-open). Consequence: a cached hook verdict can outlive a config change by at
 
 ```
 hook → spawn checker, write letter to stdin, close
-chk → {"protocol":"shell-warden.verdict.v2","result":{"invocationId":"...","verdict":"deny","message":"...","commands":[...]}}
+chk → {"protocol":"shell-warden.verdict.v3","result":{"invocationId":"...","verdict":"deny","message":"...","commands":[...]}}
 chk → exit 0
 hook → permission.reply(decision:"reject", message) / "once" / silence
 ```
@@ -134,7 +140,10 @@ chk → exit 2, no stdout
 hook → onCheckerError (default "ask"): no reply → human sees the prompt
 ```
 
-## 2.7 Verdict v2 envelope and command semantics
+## 2.7 Historical verdict v2 envelope and command semantics
+
+Historical record only. V3 consumers MUST NOT implement this retired reader.
+The active replacement is §2.10 and section 12.
 
 The new checker MUST write only this v2 envelope for every outcome; it MUST NOT
 select v1 or v2 from command data, negotiate a response version, probe consumer
@@ -178,7 +187,7 @@ Retained typed evidence or raw text MAY match ordinary ask or deny rules. An
 emitted ask vote yields ask with the deterministic `ruleId` selection of §2.8;
 deny remains dominant. Opaque evidence likewise MUST NOT auto-allow.
 
-## 2.8 Consumer validation
+## 2.8 Historical v2 consumer validation
 
 After JSON Schema validation, consumers MUST apply semantic invariants using the
 expected letter context: its `invocation.id`, command count, and positional indexes.
@@ -228,7 +237,7 @@ restrictive reduction of command verdicts. Parser or library text MUST NOT be
 serialized.
 The existing 16 KiB facts/depth-8 and total 64 KiB verdict caps remain mandatory.
 
-## 2.9 Coordinated release and completion
+## 2.9 Historical v2 coordinated release and completion
 
 The checker and hook MUST be published and deployed as one coordinated v2-only
 pair for [hook issue 13](https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/13).
@@ -239,3 +248,38 @@ Migration MUST NOT be reported complete until the docs and schema are merged, th
 coordinated hook and checker releases are deployed, v2-only contract tests pass,
 and deployed checker v2 emission is verified. This docs repository supplies no
 release-test evidence.
+
+## 2.10 Active verdict v3 envelope and validation
+
+The checker MUST emit only the exact `shell-warden.verdict.v3` envelope. The
+letter remains version 1. Active schemas are configuration v3 and verdict v3;
+retired configuration/response versions MUST fail closed, without another
+evaluator or parser.
+
+```json
+{
+  "protocol": "shell-warden.verdict.v3",
+  "result": {
+    "invocationId": "msg:call",
+    "verdict": "ask",
+    "commands": [{
+      "index": 0,
+      "verdict": "ask",
+      "classification": "parameter",
+      "match": "expression",
+      "facts": {
+        "evidence": "parameter",
+        "reasons": ["parameter-expansion", "predicate-unknown"],
+        "diagnostics": "truncated-after-decision"
+      }
+    }]
+  }
+}
+```
+
+The normative classification tuples, full/truncated diagnostics, uncertainty
+floor, version replacement, and consumer checks are specified in
+[12 — Contextual parameters](12-contextual-parameters.md). Unchanged invocation,
+letter, exit-code, deadline, and hard byte/depth caps in §§2.1–2.6 remain in force.
+The hook MUST validate v3 schema and semantics before application and MUST NOT
+synthesize allow, translate a retired envelope, or fall back after a failure.

@@ -1,14 +1,16 @@
-# 06 — Checker Configuration: Command Profiles (v2)
+# 06 — Checker Configuration: Command Profiles (v3)
 
-Version 2.5 · 2026-11-16 · Schema-first checker configuration v2 accepted by
+Version 3.0 · 2026-11-17 · Contextual parameter configuration under
+[ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
+[12 — Contextual parameters](12-contextual-parameters.md). The schema-first foundation was accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md), with normative
 verdict output updates under [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md),
 and tracked by [docs#21](https://github.com/agent-guardrails/docs/issues/21). The accepted
 [configuration design](https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-config-v2.md) defines the public shapes that
 this specification and the schema make normative.
 
-Schema: `schemas/shell-warden.config.v2.schema.json` (`defaults`, `limits`, `redirectPolicies`,
-`profiles`). A v2 checker reads v2 only; backward compatibility, automatic translation, and
+Schema: `schemas/shell-warden.config.v3.schema.json` (`defaults`, `limits`, `redirectPolicies`,
+`profiles`). The checker reads v3 only; backward compatibility, automatic translation, and
 compatibility shims are out of scope.
 
 The checker owns ALL policy: recursive parsing and executable-part extraction
@@ -48,7 +50,7 @@ https://github.com/agent-guardrails/docs/issues/40.
   require an absolute result. Unset variables and unreadable paths invalidate
   the input set. It MUST canonicalize paths and reject repeated canonical
   paths, including symlink aliases. Distinct hard links are distinct inputs.
-- Each file MUST be a complete, independently valid v2 document. Empty bytes,
+- Each file MUST be a complete, independently valid v3 document. Empty bytes,
   `{}`, and incomplete fragments are invalid; complete policies with empty
   `profiles` are valid. Duplicate object keys remain invalid. A reference MUST
   resolve within its own file; assembly MUST NOT repair unresolved references.
@@ -87,7 +89,7 @@ individual-file schema shape are unchanged.
 
 ```jsonc
 {
-  "version": 2,
+  "version": 3,
   "defaults": {
     "action": "ask",
     "redirectPolicy": "no-redirects"
@@ -151,7 +153,7 @@ A **profile** owns the complete lexical grammar and policy for one executable. I
   issuers, never policy loaders (§6.7, 08 §8.4). Implementation-owned, versioned compatibility
   and fact-catalog tables validate analyzer/profile combinations, fact names, and fact types.
 
-## 6.4 Rule schema (v2)
+## 6.4 Rule schema (v3)
 
 ```jsonc
 {
@@ -169,6 +171,11 @@ Rule IDs are 1–128 chars and unique per profile. `action` is `allow`, `ask`, o
 Ask/deny messages are at most 512 chars. A `redirectPolicy` override is optional on allow rules
 only.
 
+Allow-only `expansions` grants independent variable-name lists for `arguments`,
+`redirectTargets`, and `assignmentValues` (12 §12.3). Omission grants nothing.
+The object MUST NOT declare runtime values, repair missing coverage, or provide
+permission to another rule or configuration file.
+
 `match` is written once; its meaning depends on the action:
 
 - **ask/deny**: an ordinary predicate set — existential or conjunctive, and it need not account
@@ -179,7 +186,7 @@ only.
 
 | Element | Semantics |
 |---|---|
-| positional arguments | The decoded literal tokens that remain after the executable head, the parsed option tokens, and every value consumed by an option are removed. Everything after the `--` boundary is a positional argument (the boundary itself is parsing metadata, not an evidence dimension). |
+| positional arguments | Literal or unresolved typed values remaining after the executable head, parsed options, and consumed option values are removed. Every unresolved value remains observed. Parameter operands need a literal grammar-recognized `--` boundary for allow (12 §12.3). |
 | option occurrences | Matched by canonical option ID. Every occurrence and every one of its values remains a separate evidence item; repeated options are never collapsed to first/last. |
 | `arguments.exact` / `arguments.prefix` | ANCHORED positional sequences: the listed tokens match positionally from index 0; trailing tokens beyond the listed ones are irrelevant to the ordinary meaning. For allow, `exact` covers the whole positional list (§6.7). |
 | `arguments.containsAny` | **∃ token × ∃ glob** — some positional token matches some listed glob. Ask/deny only. |
@@ -194,16 +201,16 @@ Multiple dimensions on one `match` MUST all hold (AND). A `match` with no dimens
 nothing for allow (invalid — §6.7) and is rejected for ask/deny when a present dimension is
 empty.
 
-| Dimension | Type (v2, wire names) | Ordinary meaning |
+| Dimension | Type (v3, wire names) | Ordinary meaning |
 |---|---|---|
 | `arguments` | `exact` / `prefix` (anchored sequences), `containsAny` | as §6.5; an explicit `remainder` is an allow-only form and MUST be rejected on ask/deny |
 | `options` | `presentAll`, `presentAny`, `absentAll` (canonical ID lists), `values` (map ID → `TokenSelector`) | presence tests over canonical IDs; `values` holds when any occurrence value satisfies its selector; every referenced ID MUST be a declared profile option; `none: true` requires no option at all and excludes presence/value conditions (the `allowed` coverage form is allow-only) |
-| `environment` | `none` \| `any` \| `all` of `EnvironmentTest` (`name`, optional string-value `value`, `prefix`, `occurrence`) | exactly one of `none`/`any`/`all`; `any` = ∃ assignment × ∃ test, `all` = ∀ assignment ∃ test; `prefix: true` requires the assignment to sit in the command prefix |
-| `redirects` | `none` \| `any` \| `all` of `RedirectTest` (`operator`, `sourceFd`, `targetKind`, `occurrence`) | exactly one of `none`/`any`/`all`; omitted test dimensions are unconstrained; `targetKind` distinguishes `literalPath` from `fd`; `redirects` is invalid on allow (§6.7) |
-| `paths` | `none` \| `any` \| `all` of `PathEntry` (coordinate selector + exactly one of `exact`/`within`/`outside`) | predicates over the path coordinates the profile's `pathSources` produced; `within`/`outside` roots MUST be absolute lexical paths; redirect-coordinate `paths` on allow are invalid (§6.7) |
+| `environment` | `none` \| `any` \| `all` of `EnvironmentTest` (`name`, optional string-value `value`, `prefix`, `occurrence`) | exactly one of `none`/`any`/`all`; `any` = ∃ assignment × ∃ test, `all` = ∀ assignment ∃ test; `prefix: true` selects prefix assignments, `false` selects declarations |
+| `redirects` | `none` \| `any` \| `all` of `RedirectTest` (`operator`, `sourceFd`, `targetKind`, `occurrence`) | omitted dimensions are unconstrained; target kinds are `literalPath`, `parameterPath`, and `fd`; `redirects` is invalid on allow (§6.7) |
+| `paths` | `none` \| `any` \| `all` of `PathEntry` (coordinate + exactly one of `any: true`/`exact`/`within`/`outside`) | `any: true` is value independent; runtime comparisons on unresolved coordinates are unknown, not false (12 §12.5); roots remain absolute lexical paths |
 | `facts` | `none` \| `any` \| `all` of `FactTest` (`analyzer`, `version`, `name`, `occurrence`, typed `value`) | exactly one of `none`/`any`/`all`; every `name` and value type MUST agree with the closed catalog of the profile's declared analyzer |
 | `nestedParts` | `none` \| `any` \| `all` of `NestedPartTest` (`relation`, `occurrence`, `profile`, `classification`, `verdict`) | exactly one of `none`/`any`/`all`; relation is the hyphenated closed wire enum; `profile` is a declared profile id or `"none"` |
-| `classification` | one of `complete` \| `opaque` \| `invalid` | the part's evidence state equals (07 §7.3) |
+| `classification` | one of `complete` \| `parameter` \| `opaque` \| `invalid` | the part's structural evidence state equals (07 §7.3), independently of rule grants |
 | `raw` | string glob | the part's raw text matches; ask/deny only — MUST be rejected on allow |
 
 ## 6.7 Allow: the coverage proof
@@ -213,7 +220,8 @@ checker first validates the action-sensitive shape, then validates that every ob
 security-relevant item is universally covered; a rejected allow emits no vote and records its
 coverage failure (08 §8.3). The following are REQUIRED of every allow rule:
 
-- `"classification": "complete"` and no `raw` predicate; `match.redirects` is absent — redirect
+- Optional classification filters select `complete` or `parameter`; opaque and invalid
+  MUST NOT allow. No `raw` predicate; `match.redirects` is absent — redirect
   coverage comes exclusively from the effective redirect policy (§6.8).
 - An explicit `arguments` policy: `exact`, or `prefix` plus an explicit `remainder` —
   `{"none": true}` (no further arguments) or `{"each": tokenSelector}` (every remaining
@@ -230,15 +238,19 @@ coverage failure (08 §8.3). The following are REQUIRED of every allow rule:
   MUST be unique within `allowed`. Unknown or unlisted options prevent the allow.
 - An explicit `environment` policy: `{"none": true}` or `{"all": [entry, ...]}` — every
   assignment occurrence is covered by an `EnvironmentPolicy` with required `name`, `prefix`,
-  and `occurrence`, plus an optional complete-literal string-value selector.
+   and `occurrence`, plus a string-value selector. Unresolved parameter values require
+   explicit `value: {"any": true}` and that rule's assignment-value gate.
 - An effective redirect policy (§6.8) covers every redirect occurrence structurally — source
   FD (including the explicit `"default"` selector), operator, occurrence, and target kind —
-  and every literal redirect target path through the bundle's redirect-coordinate path entries.
+   and every literal or supported parameter target through redirect-coordinate path coverage.
+   Parameter targets require `parameterPath`, `any: true`, and their context gate (12 §12.4).
 - An explicit non-redirect `paths` policy: `{"none": true}` or `{"all": [entry, ...]}` over
   the coordinates produced by `pathSources` or the analyzer's fact catalog — never over
   redirect coordinates. `exact` compares the complete normalized lexical path;
   `within`/`outside` are lexical component comparisons on cwd-joined, dot-dot-normalized
   paths (`/work/repo2` is NOT within `/work/repo`, 07 §7.6).
+  An unresolved coordinate MUST remain observed and requires `any: true` coverage
+  plus its rule-local context permission; it MUST NOT be compared as source text.
 - An explicit `facts` policy: `{"none": true}` or `{"all": [entry, ...]}` — every emitted fact
   is covered by required analyzer ID, analyzer version, fact name, occurrence, and a typed-value
   selector. Typed values use exactly one of `any`, scalar `exact`, `string`, bounded `integer`,
@@ -340,7 +352,7 @@ failure behavior (exit 2, no stdout; 02 §2.4) rather than widening a verdict.
 
 ## 6.10 Checker CLI
 
-- `shell-warden [--config FILE]...` — letter on stdin (02 §2.2), v2 verdict on stdout (02 §2.7);
+- `shell-warden [--config FILE]...` — letter on stdin (02 §2.2), v3 verdict on stdout (02 §2.10);
   the only mode; exit codes per 02 §2.4.
 - Config default path: `$XDG_CONFIG_HOME/shell-warden/config.jsonc` (§6.1).
 - `--config /policies/git.jsonc --config /policies/rust.jsonc` assembles disjoint

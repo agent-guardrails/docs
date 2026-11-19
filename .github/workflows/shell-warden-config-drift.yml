@@ -42,8 +42,5 @@ jobs:
           python3 scripts/check-shell-warden-config-v2-drift.py
           --grammar-file scripts/tests/fixtures/grammar-target.rs
           --snapshot schemas/shell-warden.config.v2.grammar.snapshot
-      - name: Compare shell-warden main
-        run: >-
-          python3 scripts/check-shell-warden-config-v2-drift.py
-          --remote-main
-          --snapshot schemas/shell-warden.config.v2.grammar.snapshot
+      # V2 is immutable historical provenance. The active v3 workflow validates
+      # generated schemas/vectors; checker CI checks its mirrors and real loader.

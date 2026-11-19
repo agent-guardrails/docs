@@ -1,6 +1,6 @@
-# Design draft: contextual variable allowlists
+# Design: contextual variable allowlists
 
-Status: agreed user-facing direction; schema details proposed
+Status: implemented by the coordinated v3 change; no release or deployment claimed
 Current refinement: https://github.com/agent-guardrails/docs/issues/49
 Earlier refinements: https://github.com/agent-guardrails/docs/issues/43, https://github.com/agent-guardrails/docs/issues/45, and https://github.com/agent-guardrails/docs/issues/47
 Feature request: https://github.com/agent-guardrails/shell-warden/issues/69
@@ -35,7 +35,7 @@ selectors in this feature. The name allowlist is the explicit escape hatch.
 
 ## 2. Proposed configuration
 
-Illustrative allow-rule fragment; these field names are proposed, not released:
+Configuration-v3 allow-rule fragment; these are context permissions, not runtime values:
 
 ```json
 {
@@ -267,3 +267,32 @@ Required regressions:
 Validate scanner/matcher cases, checker/hook contract fixtures, schema/grammar
 consistency, and one real permission round trip. This document records the target
 design; it changes no runtime or normative schema by itself.
+
+## 8. Coordinated implementation
+
+The implementation for https://github.com/agent-guardrails/shell-warden/issues/69
+now carries parameter values through one evidence graph, validates the three
+rule-local context gates, retains unresolved path coordinates, and composes
+three-valued restrictive predicates before vote reduction.
+
+Configuration and verdict advance to v3 together; the letter stays v1. The hook
+has one v3 validator, including full/truncated uncertainty attribution and
+fail-closed rejection of retired versions. Normative details and migration are in
+[12 — Contextual parameters](../spec/shell-warden/12-contextual-parameters.md);
+the architectural decision remains
+[ADR-0026](../adr/0026-contextual-parameter-evidence.md).
+
+Redirect and nested-script parsing share the same value model. Empty arguments,
+wrapper metadata, assignment-only siblings, destination names, and executable
+children remain coverage obligations. Wrapper extras are not fabricated into
+inner argv. Known dynamic code operands and declaration destinations cannot use
+ordinary argument grants.
+
+Canonical configuration/verdict fixtures are checked by the schema tooling and
+both implementations. The permission-event integration harness spawns the paired
+Rust checker through the actual hook subscription and checks reply/silence; it
+does not execute shell letters or claim a live deployment.
+
+Coordinated tracking:
+https://github.com/agent-guardrails/docs/issues/50 and
+https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/27.

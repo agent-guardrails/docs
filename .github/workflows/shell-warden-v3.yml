@@ -1,0 +1,28 @@
+name: Shell Warden v3 Contracts
+
+on:
+  pull_request:
+    paths:
+      - "schemas/**"
+      - "scripts/**"
+      - "spec/shell-warden/**"
+      - ".github/workflows/shell-warden-v3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "26"
+      - name: Install pinned schema validator
+        run: npm install --no-save --no-package-lock ajv@8.17.1
+      - name: Verify deterministic artifacts
+        run: node scripts/generate-shell-warden-v3.mjs --check
+      - name: Validate canonical configuration and verdict vectors
+        run: node scripts/validate-shell-warden-v3.mjs

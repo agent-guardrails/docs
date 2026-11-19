@@ -1,6 +1,8 @@
 # 09 — Security: Trust Model, Invariants, Fail-Closed Matrix
 
-Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+Version 3.0 · 2026-11-17 · Active v3 invariants follow
+[ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
+[12 — Contextual parameters](12-contextual-parameters.md). The earlier v2-only transition followed
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33).
 
@@ -26,25 +28,26 @@ Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
 | I4 | Letter/verdict limits enforced by the hook regardless of checker behavior: configured `maxRequestCommands` above 128 warns and clamps; a request above its effective limit or a letter above 64 KiB degrades before spawn; verdict ≤ 64 KiB before JSON parsing; spawn concurrency ≤ `maxConcurrentSpawns` |
 | I5 | The hook never loosens an existing deny; a reply allow applies only to a request whose checker verdict was allow; native denies are unreachable (hooks see only published asks) |
 | I6 | Payload caps everywhere: letter 64 KiB, verdict 64 KiB, facts 16 KiB / depth 8, messages ≤ 512, debug-log lines ≤ 16 KiB |
-| I7 | Letter and verdict schema exact conformance: the hook accepts only exact v2 with protocol `shell-warden.verdict.v2`; it then verifies the expected letter invocation ID, command count, positional indexes equal to array positions in letter and verdict, legal semantic tuples, required deny message, diagnostics-shape coherence, full static/argv/allow vote proof, rule-ID selection, and aggregate consistency. Flat v1, unknown fields, wrong types, failed validation, or any invariant failure ⇒ `onCheckerError`; both sides ship the schemas |
+| I7 | Exact conformance: the hook accepts only `shell-warden.verdict.v3` and verifies invocation echo, positional command coverage, legal tuples, deny message, full/truncated diagnostics and uncertainty coherence, emitted allow proof, winning-rule attribution, aggregate consistency, and caps. Retired v1/v2, unknown fields, wrong types, or any invariant failure ⇒ `onCheckerError`. |
 | I8 | Optional sha256 pinning of the checker binary; mismatch ⇒ refuse to spawn |
 | I9 | Hook caches `allow` verdicts only, hook-configured TTL; denies never cached; uncached checks always see the current rules file (checker re-reads per spawn) |
-| I10 | Allow verdicts originate only from `complete` typed evidence AND a full coverage proof (06 §6.7, 07 §7.3, 08 §8.3); `opaque`/`invalid`/limit-bounded evidence and config-failure degrade toward `ask` |
+| I10 | Allow originates only from complete or supported parameter evidence, full coverage, matching rule-local context grants, and no restrictive uncertainty floor (12 §§12.3–12.5). Parameter source text is not a runtime value or proof of confinement. Opaque/invalid/limit failures cannot allow. |
 | I11 | Checker error text is logged, never injected into prompts; prompt messages come from rule `message` templates with allowlisted context interpolation only |
-| I12 | The allow coverage proof requires complete typed evidence: every participating part MUST be `complete`, every observed security-relevant item MUST be universally covered (partially matched, first-or-last-only, or unselected repeated occurrences never qualify — 06 §6.7) |
+| I12 | Every participating part must independently qualify. Every observed argument, option value, assignment destination/kind/occurrence, redirect, tracked unresolved path, fact, and nested part requires coverage. Parameter values require their rule's context grant and explicit value-independent coverage; no unresolved item may be dropped. |
 | I13 | Redirect policies are coverage infrastructure, never votes: the effective redirect policy covers only redirect structure and redirect-target coordinates, cannot rescue an allow that fails any other dimension, and `match.redirects` (plus redirect-coordinate `match.paths`) is invalid on allow. Local deny/ask votes remain dominant under the fixed lattice |
-| I14 | Order independence: profile selection, redirect-policy resolution, and vote reduction are order-free. Reordering or adding allow rules, options, hints, or policy entries MUST NOT lower any verdict, and no priority/refinement/first-match semantics exist (08 §8.6) |
+| I14 | Reordering does not change selection, resolved policies, or votes. Adding allow MUST NOT lower an established restrictive vote or uncertainty floor. A first qualifying allow may replace a bare default ask; failed unknown allow proofs do not veto other allows. No priority/refinement/first-match semantics exist. |
 | I15 | Catalog closure without I/O: analyzers, fact names, redirect operators, target kinds, relations, option arities, and lexical-alias equivalence are held in closed, versioned implementation-owned tables and are machine-checkable from the config text alone — no filesystem, PATH, or network lookup participates in validation or allow coverage. Evidence production performs no I/O |
 | I16 | Public configuration is the draft-2020-12 schema shape, not a language-specific DTO layout. Every tagged selector has one discriminator and direct payload; nested Serde wrappers, unknown keys, type coercion, omitted allow dimensions, positive-arity entries without value coverage, and v1/legacy forms are invalid |
 | I17 | Invalid evidence MUST NOT automatically deny or allow. When no ordinary rule emits a vote, it MUST produce a bare ask without `ruleId`. Ordinary ask or deny rules MAY match retained typed evidence or raw text; an emitted ask uses the deterministic `ruleId`, and deny remains dominant. Opaque evidence MUST NOT allow. |
-| I18 | Flat v1, absent, unknown, non-string, or malformed protocol, failed v2 validation, or semantic invariant failure MUST use `onCheckerError` and MUST NOT select a fallback parser. Unknown classifications, missing classification or match, invalid/opaque/raw allow, arbitrary diagnostics, and inconsistent aggregate are anomalies. |
-| I19 | Recognized full and truncated v2 diagnostics use their known key sets and stable 07 §7.3 reasons. Opaque evidence requires `opaque-expansion`, may include `complete` for mixed complete and opaque parts, and rejects invalid-cause reasons. Full diagnostics record emitted votes, not default asks. A full static/argv/allow command requires an emitted allow vote. A present `ruleId` is the UTF-8-byte-order smallest emitted vote matching the command verdict; a default ask with no emitted ask vote omits it. Parser or library text is never exposed. |
+| I18 | Retired responses, absent/unknown/non-string/malformed protocol, failed v3 schema or semantics, impossible tuples, or inconsistent aggregates MUST use `onCheckerError` with no fallback. Only static/argv and parameter/expression may allow. |
+| I19 | Closed full/truncated v3 diagnostics use stable reasons and evidence anchors. Full facts require `uncertain`, including when empty. Parameter commands require facts; every full allow needs an emitted qualified allow vote. Winning `ruleId` comes only from a real winning vote, never uncertainty. Parser/library text is not exposed. |
+| I20 | A potentially applicable unknown ask/deny predicate establishes a part-local ask floor before aggregation and diagnostic truncation. `predicate-unknown` and responsible full predicate coordinates preserve the reason without claiming an unproven matched deny. A known false conjunct or true alternative remains decisive; a conclusive deny still dominates. |
 
 ## 9.3 Threat model (selected vectors)
 
 | # | Vector | Mitigation |
 |---|---|---|
-| T1 | Model crafts an obfuscated command (`$(…)`, vars, unquoted globs, tilde) to slip rules | active expansion and unresolvable wrapper shapes ⇒ `opaque`; heredoc/here-string and unsupported redirects ⇒ `invalid`; either way the part cannot allow and at least one ask emits; deny/ask still match typed classification or raw text (08 §8.6) |
+| T1 | Model crafts expansions or obfuscated words to slip rules | only one supported simple reference plus literal suffix can become parameter evidence; context grants and full coverage remain required. Other expansions are opaque/invalid. Unknown restrictive predicates block auto-allow, and executable substitutions remain independent evidence. |
 | T2 | Model smuggles a chain the harness split hid (`bash -c 'curl … \| sh'`) | recursive checker-side split (07 §7.2); every sub-part evaluated; unresolvable = opaque |
 | T3 | Repo ships `.opencode/shell-warden` rules to widen policy | not loaded; warning logged (D5/I2 posture) |
 | T4 | Repo points the plugin at a project-local checker | checker path is user-global + absolute; validation disables plugin on violation (I2) |
@@ -72,7 +75,8 @@ Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
 | Project checker/policy config | ignored with warning | n/a |
 | Plugin unload (`dispose`) | in-flight invocations abandoned → `onCheckerError` | SIGTERM → grace → SIGKILL |
 | Checker internal error, single command/part | that part degrades inside the verdict; aggregate still tight (most-restrictive holds) | exit 0 with a valid verdict |
-| Flat v1 response; absent, unknown, malformed, or non-string protocol; failed v2 validation; semantic failure | `onCheckerError`; no fallback | n/a |
+| Retired v1/v2 response; absent/unknown/malformed/non-string protocol; failed v3 validation; semantic failure | `onCheckerError`; no fallback | n/a |
+| Applicable ask/deny predicate remains unknown | at least ask, without an invented vote or winning rule ID | exit 0 with `predicate-unknown`; not a checker error |
 | Invalid/opaque/raw allow; missing classification or match; unknown classification | `onCheckerError` | n/a |
 | Arbitrary, malformed known-shape, or classification-inconsistent diagnostics | `onCheckerError` | n/a |
 | Aggregate differs from most-restrictive command verdict | `onCheckerError` | n/a |

@@ -4,12 +4,16 @@ Specification set · Status: retired M0 engine exists as reference (`agent-guard
 v2 target architecture per ADR-0016: **thin hook + one-shot decision binary**
 (`agent-guardrails/opencode-shell-warden-hook` + `shell-warden`)
 
-Verdict v2 is governed by the current decision,
+The active configuration/verdict v3 contract is governed by
+[ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
+[12 — Contextual parameters](12-contextual-parameters.md). V1/v2 schemas remain
+historical provenance; no alternate runtime reader or fallback is supported.
+The earlier v2-only transition was governed by
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md),
 for [docs issue 33](https://github.com/agent-guardrails/docs/issues/33). [ADR-0020](https://github.com/agent-guardrails/docs/blob/main/adr/0020-versioned-shell-warden-verdict-envelope.md)
 and [ADR-0022](https://github.com/agent-guardrails/docs/blob/main/adr/0022-post-schema-shell-warden-verdict-validation.md)
-are superseded historical provenance. Implementation and coordinated rollout remain pending;
-released verdict v1 remains immutable historical provenance, not an active runtime contract.
+are historical provenance. The coordinated v3 implementation does not by itself
+claim a release or production rollout.
 
 A two-tier permission system for OpenCode V2: a **thin hook** (in-process plugin) and a
 **one-shot decision binary** (`shell-warden`, Rust). All decision logic lives in the
@@ -25,16 +29,17 @@ state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
 | [03-shim.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/03-shim.md) | plugin | reply automation, invoker, per-session state |
 | [04-shim-config.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/04-shim-config.md) | plugin config | `opencode.jsonc` plugin options schema |
 | [05-engine-runtime.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/05-engine-runtime.md) | retired | persistent engine pointers only |
-| [06-engine-config.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/06-engine-config.md) | rules grammar | **command profiles, typed-evidence rules grammar of the checker (config v2)** |
+| [06-engine-config.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/06-engine-config.md) | rules grammar | **command profiles and typed-evidence rules (config v3)** |
 | [07-command-parsing.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/07-command-parsing.md) | parsing | **normative**: recursive parts and evidence states, quote classes, redirects, matching vocabulary |
 | [08-request-processing.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/08-request-processing.md) | decision pipeline | **action-sensitive matching, fixed-lattice reduction, monotonicity; hook duties** |
 | [09-security.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/09-security.md) | security | invariants, threat model, fail-closed matrix |
 | [10-testing.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/10-testing.md) | quality | unit/scenario/property suites, golden (checker CLI), contract (hook), integration; live-smoke history |
 | [11-roadmap.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/11-roadmap.md) | delivery | milestones, open questions |
+| [12-contextual-parameters.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/12-contextual-parameters.md) | active v3 contract | **context grants, unknown predicates, coverage, diagnostics, and coordinated migration** |
 | [HANDOFF-verdict-v2.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/HANDOFF-verdict-v2.md) | implementation | separate Rust checker and TypeScript hook verdict-v2 work |
 | [shell-legible-gate design](https://github.com/agent-guardrails/docs/blob/main/design/shell-legible-gate.md) | design | readability gate, standalone binary (ADR-0007 superseded 0007: separate project) |
 | [shell-warden-verdict-v2 design](https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-verdict-v2.md) | design | accepted verdict-v2 direction and migration |
-| [schemas](https://github.com/agent-guardrails/docs/tree/main/schemas) | machine | JSON Schema drafts: letter v1, verdict v1, verdict v2, checker config v1 (superseded reference) and config v2 |
+| [schemas](https://github.com/agent-guardrails/docs/tree/main/schemas) | machine | active letter v1, config v3, verdict v3; earlier versions are historical |
 
 ## Reading order
 
@@ -43,7 +48,8 @@ state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
 3. Checker side, in dependency order: `06-engine-config.md` → `07-command-parsing.md` → `08-request-processing.md`
 4. Hook side: `03-shim.md` → `04-shim-config.md`
 5. Cross-cutting: `09-security.md`, `10-testing.md`, `11-roadmap.md`
-6. Verdict-v2 implementers: [HANDOFF-verdict-v2.md](https://github.com/agent-guardrails/docs/blob/main/spec/shell-warden/HANDOFF-verdict-v2.md) after the relevant checker or hook path.
+6. Current implementers: [12-contextual-parameters.md](12-contextual-parameters.md).
+   [HANDOFF-verdict-v2.md](HANDOFF-verdict-v2.md) is historical provenance.
 
 ## Conventions
 
@@ -53,10 +59,6 @@ state (deny budgets, allow cache, debug log) and applies verdicts tighten-only.
   `shell-warden` repository. **Letter / verdict** = the request/response JSON of 02.
 - All durations are integer milliseconds. All budget clamps are enforced with warn+clamp, never silently.
 - Spec changes: bump the doc version and the relevant `version` field of the matching schema.
-- Revision status: 01 is v2.2 under ADR-0023. Documents 06 and 07 are v2.4 under
-   [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and
-  [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md),
-  [docs issue 21](https://github.com/agent-guardrails/docs/issues/21). Documents 02, 03, and
-  08–11 are respectively v2.3, v2.2, and v2.4 as of 2026-11-12 for
-  [docs issue 33](https://github.com/agent-guardrails/docs/issues/33) and ADR-0023; 04 remains
-  v2.0 under ADR-0016; 05 remains retired.
+- Revision status: 02, 06–09, and 12 define the coordinated v3 change.
+  Other documents retain their unchanged subsystem contracts; historical
+  v2-only handoffs do not select an alternate response runtime.
