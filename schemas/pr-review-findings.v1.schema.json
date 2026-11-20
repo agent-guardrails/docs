@@ -55,11 +55,11 @@
         "defectClass": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,95}$" },
         "severity": { "enum": ["blocker", "major", "minor", "nit"] },
         "title": { "type": "string", "minLength": 1, "maxLength": 160 },
-        "explanation": { "type": "string", "minLength": 1, "maxLength": 20000 },
+        "explanation": { "type": "string", "minLength": 1, "maxLength": 20000, "description": "Reviewer analysis. Supplemental source citations identify repository, full commit, path, and lines; they are not hash-covered bundle artifacts." },
         "filePath": { "$ref": "#/$defs/safeRepositoryPath" },
         "line": { "type": "integer", "minimum": 1 },
         "diffSide": { "enum": ["LEFT", "RIGHT"] },
-        "evidenceReferences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceReference" } },
+        "evidenceReferences": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceReference" }, "description": "Verified bundle artifacts only. Supplemental pinned source belongs in explanation and does not replace these required references." },
         "remediation": { "type": "string", "minLength": 1, "maxLength": 20000 },
         "blocking": { "type": "boolean" }
       },
