@@ -51,7 +51,9 @@ d.Config.properties.version.const = 3;
 d.VariableName = { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z_][A-Za-z0-9_]*$" };
 d.VariableNames = { type: "array", maxItems: 64, uniqueItems: true, items: { $ref: "#/$defs/VariableName" } };
 d.ExpansionPermissions = {
-  type: "object", additionalProperties: false,
+  type: "object",
+  description: "Rule-local context grants do not authorize dynamic executable or code operands. Known wrapper/interpreter blocking uses literal basenames, including path spellings; awk operands remain opaque without a program-role proof, even after --. See spec/shell-warden/12-contextual-parameters.md.",
+  additionalProperties: false,
   properties: Object.fromEntries(["arguments", "redirectTargets", "assignmentValues"].map((name) => [
     name, { $ref: "#/$defs/VariableNames" },
   ])),

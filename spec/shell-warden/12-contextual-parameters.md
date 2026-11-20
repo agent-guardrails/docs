@@ -83,9 +83,19 @@ variable name. Opaque and invalid evidence MUST NOT allow.
 Known dynamic code/executable operands cannot use ordinary argument grants. The
 closed blocking catalog includes `eval`, `exec`, `command`, `builtin`, `source`,
 `.`, `bash`, `sh`, `node`, `nodejs`, `python`, `python2`, `python3`, `perl`,
-`ruby`, `php`, `lua`, `Rscript`, `deno`, and `bun`. Literal basenames are used for
-this blocking check, not implicit transparent alias execution. This is not
+`awk`, `ruby`, `php`, `lua`, `Rscript`, `deno`, and `bun`. Literal basenames are
+used for this blocking check, not implicit transparent alias execution. This is not
 semantic discovery of arbitrary generic programs.
+
+The wrapper blocking check for `sudo`, `nohup`, `nice`, `timeout`, `env`, and
+`xargs` MUST likewise use literal basenames, including absolute and relative path
+spellings. This blocking check MUST NOT imply transparent unwrapping of a path
+spelling. Unknown wrapper operands remain opaque.
+
+For `awk`, a literal `--` is not proof of a data role: the next operand can be
+program source. Without a program-role analyzer, nonliteral `awk` operands MUST
+remain opaque even when an argument grant covers their variable name.
+
 With `sed-v1`, a positional program MUST remain literal; parameter file operands
 after a literal program and operand boundary can qualify. Dynamic option values
 cannot provide an alternative program proof. Declared analyzers MUST NOT silently

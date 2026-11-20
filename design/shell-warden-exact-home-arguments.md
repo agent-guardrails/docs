@@ -94,6 +94,10 @@ For example, `ls -- "$HOME/.config/app"` can qualify; a variable-name grant alon
 does not justify treating `ls "$HOME/.config/app"` as known non-option argv.
 Executable names and option spellings remain literal. Dynamic option values
 and wrapper/interpreter operands are outside this first slice.
+Known wrapper blocking uses literal basenames even for path spellings; it does
+not make those spellings transparent aliases. `awk` is also a known code
+interpreter: `--` does not establish a data role for its next operand. Without
+a program-role analyzer, unknown `awk` operands stay opaque.
 
 ### Redirect targets
 
