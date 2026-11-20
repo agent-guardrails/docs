@@ -6,6 +6,11 @@ Implementation ticket: https://github.com/agent-guardrails/.github/issues/35
 Decision: https://github.com/agent-guardrails/docs/blob/main/adr/0019-fixed-evidence-bundle-inspection.md
 Implementation repository: https://github.com/agent-guardrails/.github
 
+Reviewer-context follow-up:
+[ADR 0027](https://github.com/agent-guardrails/docs/blob/main/adr/0027-read-only-pr-review-source-context.md)
+permits supplemental pinned source reading outside the inspector. This document
+continues to describe the fixed inspector and its bundle-artifact boundary.
+
 ## Purpose
 
 Offline reviewers need focused access to verified evidence without reconstructing
@@ -111,11 +116,14 @@ identity fields, or emit partial JSON.
 3. Use `files` and path-scoped `diff` for source evidence, `ci` for normalized
    verification context, and `discussion` for review context.
 4. Use `manifest` when validating provenance or evidence completeness.
-5. Produce separate schema-valid findings. Do not modify the bundle.
+5. Supplement missing source context with the revision-pinned read-only workflow
+   in [the source-context design](https://github.com/agent-guardrails/docs/blob/main/design/read-only-pr-review-source-context.md).
+6. Produce separate schema-valid findings. Do not modify the bundle.
 
 The schemas `schemas/pr-review-bundle.v1.schema.json` and
-`schemas/pr-review-findings.v1.schema.json` remain version 1 and unchanged. The
-inspector creates no persisted artifact, so it creates no new schema surface.
+`schemas/pr-review-findings.v1.schema.json` retain version 1 and their validation
+constraints. The source-context follow-up adds descriptive annotations only.
+The inspector creates no persisted artifact or new schema surface.
 
 ## Acceptance criteria
 
