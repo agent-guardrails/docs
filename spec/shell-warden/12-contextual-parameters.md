@@ -1,11 +1,16 @@
 # 12 — Contextual parameters: configuration and verdict v3
 
-Version 3.0 · 2026-11-17
+Version 3.1 · 2026-11-24
 
 Decision: [ADR-0026](../../adr/0026-contextual-parameter-evidence.md).
 Feature: https://github.com/agent-guardrails/shell-warden/issues/69.
 Contract: https://github.com/agent-guardrails/docs/issues/50.
 Hook: https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/27.
+
+Executable-spelling integration:
+https://github.com/agent-guardrails/shell-warden/issues/73 and
+https://github.com/agent-guardrails/docs/issues/51, following
+[ADR-0025](../../adr/0025-explicit-same-name-executable-spellings.md).
 
 Schemas:
 [configuration v3](../../schemas/shell-warden.config.v3.schema.json),
@@ -59,9 +64,11 @@ the same quote/expansion scanning as ordinary words. Every redirect occurrence,
 assignment destination/kind/ordinal, empty literal argument, and executable child
 MUST remain observed evidence.
 
-Fixed literal shell scripts MUST use that same evidence model. Collapsing a
-transparent shell wrapper MUST preserve its outer assignment/redirect obligations
-on executable descendants. Extra wrapper operands MUST NOT be manufactured into
+Fixed literal shell scripts MUST use that same evidence model. A shell wrapper
+MUST remain a participating parent and preserve its outer assignment/redirect
+obligations on both itself and executable descendants. Every parent and child
+MUST independently select an exact profile and prove full coverage, including
+its own rule-local parameter grants. Extra wrapper operands MUST NOT be manufactured into
 child argv or options. Assignment-only sibling parts remain participating asks
 when no executable profile applies; they MUST NOT disappear beside allowed parts.
 
@@ -82,15 +89,23 @@ variable name. Opaque and invalid evidence MUST NOT allow.
 
 Known dynamic code/executable operands cannot use ordinary argument grants. The
 closed blocking catalog includes `eval`, `exec`, `command`, `builtin`, `source`,
-`.`, `bash`, `sh`, `node`, `nodejs`, `python`, `python2`, `python3`, `perl`,
-`awk`, `ruby`, `php`, `lua`, `Rscript`, `deno`, and `bun`. Literal basenames are
-used for this blocking check, not implicit transparent alias execution. This is not
+`bash`, `sh`, `node`, `nodejs`, `python`, `python2`, `python3`, `perl`,
+`awk`, `ruby`, `php`, `lua`, `Rscript`, `deno`, and `bun`. The shared lexical
+basename helper (06 §6.3, 07 §7.2) supplies this blocking check without granting
+profile selection or permission. This is not
 semantic discovery of arbitrary generic programs.
 
 The wrapper blocking check for `sudo`, `nohup`, `nice`, `timeout`, `env`, and
-`xargs` MUST likewise use literal basenames, including absolute and relative path
-spellings. This blocking check MUST NOT imply transparent unwrapping of a path
-spelling. Unknown wrapper operands remain opaque.
+`xargs` MUST likewise recognize valid bare names and normalized absolute POSIX
+spellings through that helper. Recognized wrappers retain independent parents
+and children; unknown wrapper operands remain opaque.
+
+Relative or irregular heads, including bare `.` and `..`, cannot be enrolled
+under 06 §6.3. They MUST NOT be normalized or receive command-specific basename
+dispatch. Their classification follows the general evidence model: for example,
+`./env -- "$HOME"` has parameter evidence and an expression match, but MUST
+default to ask because no profile can select that head. Ordinary parameter grants
+MUST NOT authorize an unselected head.
 
 For `awk`, a literal `--` is not proof of a data role: the next operand can be
 program source. Without a program-role analyzer, nonliteral `awk` operands MUST

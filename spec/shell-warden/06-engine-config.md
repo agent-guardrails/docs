@@ -346,13 +346,15 @@ The draft-2020-12 JSON Schema rejects unknown keys, wrong types, local union/com
 shapes, selector cardinality violations, and action-sensitive rule shapes. Semantic validation
 proves relationships JSON Schema cannot express across declarations:
 
-- `version` MUST be `2`; `defaults.action` MUST be `"ask"`; `defaults.message` and rule
+- `version` MUST be `3`; `defaults.action` MUST be `"ask"`; `defaults.message` and rule
   `message` MUST be ≤ 512 chars; profile/rule/hint ids MUST be 1–128 chars; profile and rule
   ids MUST be unique.
 - Caps: profiles count ≤ `limits.profiles`; total rules ≤ `limits.rules` (also enforced per
   profile); the raw file MUST be ≤ `limits.configBytes` bytes.
-- Cross-profile closure: every `executables` alias MUST belong to exactly one profile;
-  multi-spelling lists MUST equal one lexical alias catalog entry.
+- Cross-profile closure: every full executable spelling MUST belong to exactly
+  one profile, including across assembled files. Each profile's distinct-basename
+  set MUST be a singleton or exactly one complete catalog group, with all spelling
+  and analyzer constraints from §6.3.
 - Options: canonical ids 1–64 chars, arity 0–4, aliases 1–16 per option (each 1–32 chars) and
   unique inside the profile; analyzer/profile combinations MUST occur in the versioned
   compatibility table.
