@@ -17,7 +17,7 @@ SUBPROCESS_TIMEOUT_SECONDS: Final = 5.0
 
 
 class DriftGuardTests(unittest.TestCase):
-    def run_guard(self, grammar: Path) -> subprocess.CompletedProcess[str]:
+    def run_guard(self, grammar: Path, snapshot: Path = SNAPSHOT) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 sys.executable,
@@ -25,7 +25,7 @@ class DriftGuardTests(unittest.TestCase):
                 "--grammar-file",
                 str(grammar),
                 "--snapshot",
-                str(SNAPSHOT),
+                str(snapshot),
             ],
             check=False,
             capture_output=True,
@@ -49,6 +49,17 @@ class DriftGuardTests(unittest.TestCase):
 
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("grammar snapshot matches", result.stdout)
+
+    def test_v3_snapshot_checks_fields_without_changing_historical_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            snapshot = Path(directory) / "v3.snapshot"
+            snapshot.write_text(SNAPSHOT.read_text().replace("config v2", "config v3"))
+            self.assertEqual(0, self.run_guard(FIXTURE, snapshot).returncode)
+            grammar = Path(directory) / "changed.rs"
+            grammar.write_text(FIXTURE.read_text().replace("pub contains_any:", "pub changed:"))
+            result = self.run_guard(grammar, snapshot)
+            self.assertEqual(1, result.returncode)
+            self.assertIn("contains_any", result.stderr)
 
     def test_missing_begin_marker_is_rejected(self) -> None:
         result = self.run_mutation(BEGIN_MARKER, "// marker removed")

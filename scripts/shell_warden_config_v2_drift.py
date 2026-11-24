@@ -7,6 +7,7 @@ from typing import Final, override
 BEGIN_MARKER: Final = "// shell-warden-config-v2-grammar: begin"
 END_MARKER: Final = "// shell-warden-config-v2-grammar: end"
 SNAPSHOT_HEADER: Final = "# shell-warden config v2 structural grammar snapshot"
+V3_SNAPSHOT_HEADER: Final = "# shell-warden config v3 structural grammar snapshot"
 DECLARATION_RE: Final = re.compile(r"\bpub\s+(?:struct|enum)\s+([A-Za-z_][A-Za-z0-9_]*)")
 TOKEN_RE: Final = re.compile(r'"(?:\\.|[^"\\])*"|::|=>|->|[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[^\s]')
 
@@ -144,7 +145,9 @@ def _declaration_end(source: str, name: str, declaration_start: int) -> int:
     raise GrammarError(f"unbalanced declaration `{name}`")
 
 
-def normalize_grammar(source: str) -> str:
+def normalize_grammar(source: str, header: str = SNAPSHOT_HEADER) -> str:
+    if header not in (SNAPSHOT_HEADER, V3_SNAPSHOT_HEADER):
+        raise GrammarError("unsupported snapshot header")
     region = _retain_serde_attributes(_strip_comments(_marked_region(source)))
     declarations: dict[str, str] = {}
     cursor = 0
@@ -159,12 +162,12 @@ def normalize_grammar(source: str) -> str:
         cursor = end
     if not declarations:
         raise GrammarError("no public struct or enum declarations between markers")
-    return "\n".join((SNAPSHOT_HEADER, *(declarations[name] for name in sorted(declarations)), ""))
+    return "\n".join((header, *(declarations[name] for name in sorted(declarations)), ""))
 
 
 def parse_snapshot(snapshot: str) -> dict[str, str]:
     lines = snapshot.splitlines()
-    if not lines or lines[0] != SNAPSHOT_HEADER:
+    if not lines or lines[0] not in (SNAPSHOT_HEADER, V3_SNAPSHOT_HEADER):
         raise GrammarError("snapshot has an invalid header")
     if len(lines) == 1:
         raise GrammarError("snapshot contains no declarations")

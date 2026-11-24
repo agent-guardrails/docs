@@ -2026,8 +2026,7 @@
           "maxItems": 8,
           "uniqueItems": true,
           "items": {
-            "type": "string",
-            "minLength": 1
+            "$ref": "#/$defs/ExecutableSpelling"
           }
         },
         "options": {
@@ -2161,6 +2160,16 @@
         }
       },
       "additionalProperties": false
+    },
+    "ExecutableSpelling": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^(?:[^/\\u0000-\\u001f\\u007f]+|/(?:[^/\\u0000-\\u001f\\u007f]+/)*[^/\\u0000-\\u001f\\u007f]+)$",
+      "not": {
+        "pattern": "[\\u0000-\\u001f\\u007f]|(?:^|/)\\.\\.?(?:/|$)"
+      },
+      "$comment": "Exact bare name or normalized absolute POSIX spelling; never expanded or normalized. Semantic validation also enforces 4096 UTF-8 bytes, a singleton distinct-basename set or exactly one complete catalog group (node/nodejs or python/python3), unique full-spelling ownership across assembled files, analyzer compatibility for every basename, and bare-only export bindings (ADR 0025)."
     },
     "VariableName": {
       "type": "string",

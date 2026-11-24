@@ -93,7 +93,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const configRoot = "schemas/fixtures/shell-warden.config.v3";
   const policies = json(`${configRoot}/manifest.json`);
   for (const entry of policies.fixtures) {
-    if (validateConfig(json(`${configRoot}/${entry.path}`)) !== entry.valid) {
+    if (validateConfig(json(`${configRoot}/${entry.path}`)) !== (entry.schemaValid ?? entry.valid)) {
       throw new Error(`config fixture disagrees: ${entry.path}`);
     }
   }

@@ -1,6 +1,6 @@
 # 06 — Checker Configuration: Command Profiles (v3)
 
-Version 3.0 · 2026-11-17 · Contextual parameter configuration under
+Version 3.1 · 2026-11-24 · Contextual parameter configuration under
 [ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
 [12 — Contextual parameters](12-contextual-parameters.md). The schema-first foundation was accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md), with normative
@@ -8,6 +8,11 @@ verdict output updates under [ADR-0023](https://github.com/agent-guardrails/docs
 and tracked by [docs#21](https://github.com/agent-guardrails/docs/issues/21). The accepted
 [configuration design](https://github.com/agent-guardrails/docs/blob/main/design/shell-warden-config-v2.md) defines the public shapes that
 this specification and the schema make normative.
+
+Executable spelling and wrapper coverage revision:
+[ADR-0025](https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md),
+coordinated under https://github.com/agent-guardrails/docs/issues/51 and
+https://github.com/agent-guardrails/shell-warden/issues/73.
 
 Schema: `schemas/shell-warden.config.v3.schema.json` (`defaults`, `limits`, `redirectPolicies`,
 `profiles`). The checker reads v3 only; backward compatibility, automatic translation, and
@@ -121,7 +126,7 @@ A **profile** owns the complete lexical grammar and policy for one executable. I
 ```jsonc
 {
   "id": "git",                         // REQUIRED, 1–128 chars, unique
-  "executables": ["git"],              // REQUIRED, 1–8 literal aliases, non-empty, globally unique
+  "executables": ["git", "/opt/git"],  // REQUIRED, 1–8 exact spellings, globally unique
   "options": {                         // canonical option ID → aliases + arity (+ inline form)
     "force": { "aliases": ["--force", "-f"], "arity": 0 },
     "path":  { "aliases": ["-C"], "arity": 1, "inline": false }
@@ -137,10 +142,23 @@ A **profile** owns the complete lexical grammar and policy for one executable. I
 - **Executable selection is lexical.** The checker selects the profile whose `executables`
   contain the part's head token; the part's head MUST be a resolvable literal token. The head
   token is evidence of selection and is NOT part of the positional arguments (08 §8.2).
-- A singleton `executables` list is always valid. A multi-spelling list MUST equal one complete
-  entry of the implementation-owned, versioned lexical alias catalog. Such an entry asserts
-  identical option grammar and analyzer behavior — it does NOT assert resolved binary identity.
-  Unrelated executables MUST get separate profiles.
+- Each `executables` entry MUST be a bare name without `/` or a normalized
+  absolute POSIX path. Empty strings, bare `.`/`..`, relative paths, empty path
+  components, trailing `/`, and `.`/`..` components MUST be rejected, not normalized.
+  Each spelling MUST contain at most 4096 UTF-8 bytes and no NUL or ASCII control
+  characters (U+0000–U+001F, U+007F). Spaces, Unicode, backslashes, and wildcard
+  characters remain literal; no expansion, case folding, or Unicode normalization occurs.
+- The distinct case-sensitive basename set MUST be a singleton or exactly one
+  complete implementation-owned alias group: `node`/`nodejs` or `python`/`python3`.
+  A union of groups or any unrelated pair MUST be rejected. Paths-only lists
+  are valid; profile IDs and list ordering do not determine command identity.
+  Each full spelling MUST have unique ownership, including across assembled
+  explicit files; disjoint profiles MAY share basenames. Catalog groups assert
+  modeled grammar compatibility, not binary identity, installed versions, or
+  enrollment of any unlisted path.
+- Selection MUST compare the complete decoded head without normalization or
+  basename fallback. Enrolling `tool` and `/opt/tool` does not enroll `/tmp/tool`,
+  `./tool`, or `/opt/./tool`. No PATH/filesystem lookup or migration mode exists.
 - **Option grammar.** `arity` 0 is a flag; arity 1–4 consumes that many following tokens as
   values, regardless of their shape. Aliases (1–16 per option, each 1–32 chars) are exactly as
   they appear in argv and MUST be unique inside the profile; two aliases of one canonical ID
@@ -152,6 +170,18 @@ A **profile** owns the complete lexical grammar and policy for one executable. I
   `xargs-v1`. They are versioned evidence producers, never extension points, never verdict
   issuers, never policy loaders (§6.7, 08 §8.4). Implementation-owned, versioned compatibility
   and fact-catalog tables validate analyzer/profile combinations, fact names, and fact types.
+  `sed-v1` MUST bind only basenames `sed`; `xargs-v1` only `xargs`.
+  Compatibility MUST be checked for every spelling, including singleton lists.
+  `export-v1` MUST enroll only `["export"]`. Any path with basename `export`
+  MUST be rejected, including with generic or absent analysis: it is not the
+  modeled shell builtin. Other names MAY use generic or absent analysis.
+  Specialized analysis uses the lexical basename after exact selection, so an
+  enrolled `/opt/sed` retains the same modeled facts as `sed`.
+
+`raw` predicates remain source-sensitive. Adding a spelling requires reviewing
+raw ask/deny conditions; the checker MUST NOT rewrite them or canonicalize raw
+source. Use typed argument/option predicates for spelling-independent restrictions.
+Only emitted votes participate in deny dominance.
 
 ## 6.4 Rule schema (v3)
 

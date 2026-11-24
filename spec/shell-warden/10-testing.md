@@ -1,6 +1,7 @@
 # 10 — Testing Strategy
 
-Version 2.4 · 2026-11-12 · Revised for verdict v2 only per
+Version 3.1 · 2026-11-24 · Active v3 executable-spelling verification is in §10.3.3
+and [12 — Contextual parameters](12-contextual-parameters.md). Historical v2 testing followed
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33): draft-2020-12 schema
 fixtures, golden checker coverage, profile-driven scenario/property tests, and the hook contract
@@ -139,7 +140,48 @@ The `TypedValueSelector` integer, number, boolean, and path cases are definition
 
 All other expected outcomes remain fail-closed. Any unexpected exit code, missing selector/catalog diagnostic for one of the four specified cases, fixture-count drift, probe-count drift, or verdict mismatch MUST fail the release gate.
 
-This section clarifies [ADR-0017](../../adr/0017-schema-first-shell-warden-config-contract.md). It does not introduce an architectural decision and does not change the schema or fixture semantics.
+### 10.3.3 Executable spellings and retained wrappers
+
+The coordinated implementation of
+[ADR-0025](https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md),
+tracked by https://github.com/agent-guardrails/shell-warden/issues/73 and
+https://github.com/agent-guardrails/docs/issues/51, MUST additionally verify:
+
+- Every design validation example, paths-only lists, complete alias groups and
+  path variants, unrelated names/group unions, duplicate ownership, reversed
+  ordering, list bounds, Unicode, literal spaces/wildcards/backslashes, ASCII
+  controls, and the 4096 UTF-8-byte boundary.
+- Exact decoded selection, including quoting, without permission inheritance by
+  unlisted same-basename paths, relative heads, dot-component equivalents, or
+  dynamic heads. Cross-file conflicts MUST fail atomically with exit 2 and empty
+  stdout in either order; disjoint same-basename profiles remain valid.
+- Compatible specialized analyzer bindings for every spelling, bare-only
+  `export`, equivalent `sed` facts and `xargs` relations/opacity for enrolled
+  paths, typed argument/option/environment/redirect coverage, and typed deny
+  equivalence. Raw predicates MUST retain intentional source sensitivity.
+- Bare and absolute forms of every supported wrapper with missing, denied, or
+  uncovered parents and children; parent arguments/options/environment/redirects;
+  unknown options, unsupported forms, nested calls, command substitutions, and
+  evidence/depth limits. A parent's absence MUST NOT hide a discovered child deny.
+- Representative real checker letters for allow/ask/deny and invalid-config
+  failures, without executing any represented command; bounded diagnostics,
+  active verdict-v3 validation, Rust suites, formatting, Clippy, canonical
+  fixtures, and schema/structural-grammar drift gates.
+
+The active v3 grammar snapshot includes `Profile`; lexical and basename-group semantic
+checks are documented by the schema and exercised by the engine suites rather
+than represented as a second grammar or a compatibility mode.
+
+The active v3 full-config fixture manifest distinguishes schema validity
+(`schemaValid`, defaulting to `valid`) from complete configuration validity
+(`valid`). The schema validator MUST check the former; release-binary
+conformance MUST check the latter. Basename groups, analyzer compatibility,
+bare-only export, and UTF-8 byte limits include schema-valid semantic rejections.
+Historical v2 fixtures and snapshots remain unchanged.
+
+Contextual-parameter cases MUST cover enrolled bare and absolute shell parents,
+independent parent/child grants, dynamic-code blocking, unsupported `env`
+assignments and extra shell operands, and restrictive unknown-predicate floors.
 
 ## 10.4 Contract harness requirements
 
