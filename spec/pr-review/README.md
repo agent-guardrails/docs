@@ -3,7 +3,9 @@
 Status: version 1
 
 This specification defines the auditable pull request review workflow accepted by
-[ADR 0019](../../adr/0019-fixed-evidence-bundle-inspection.md). The
+[ADR 0019](../../adr/0019-fixed-evidence-bundle-inspection.md), with supplemental
+source inspection accepted by
+[ADR 0027](https://github.com/agent-guardrails/docs/blob/main/adr/0027-read-only-pr-review-source-context.md). The
 terms MUST, MUST NOT, REQUIRED, SHOULD, SHOULD NOT, and MAY are normative as
 described by RFC 2119.
 
@@ -248,14 +250,51 @@ The complete UTF-8 encoding of an inspection stdout JSON record MUST NOT exceed
 command MUST fail as `output-too-large`. It MUST NOT omit common identity fields,
 emit partial JSON, or expand a text or collection bound to fit.
 
-Reviewers MUST use the fixed inspection command rather than inline Node or Python,
-heredocs, `jq`, or `cat`, `grep`, `sed`, or `awk` parsing. They MUST NOT use
-generic artifact reads, dump raw CI logs, invoke query languages, or execute
-reviewed code during review.
+Reviewers MUST use the fixed inspection command for bundle artifacts rather than
+inline Node or Python, heredocs, `jq`, or `cat`, `grep`, `sed`, or `awk` parsing.
+They MUST NOT use generic bundle-artifact reads, dump raw CI logs, invoke query
+languages, or execute reviewed code during review. The supplemental source
+inspection below does not extend the inspector's command contract.
 
 `schemas/pr-review-bundle.v1.schema.json` and
-`schemas/pr-review-findings.v1.schema.json` remain version 1 and unchanged.
-Inspection creates no persisted artifact and therefore creates no schema change.
+`schemas/pr-review-findings.v1.schema.json` retain version 1 and their validation
+constraints. Supplemental source adds descriptive annotations only. Inspection
+creates no persisted artifact and does not extend either format.
+
+## Supplemental pinned source context
+
+After trusted sync, collect, and `pr` inspection, reviewers MAY use bounded
+read-only file tools and searches to inspect tracked regular source files,
+including unchanged callers and callees, in the canonical review worktree.
+Before and after an inspection batch, they MUST verify that its detached HEAD
+equals the verified bundle's full `headSha` and that the worktree is clean.
+Source paths MUST remain inside that worktree without symbolic-link components.
+Symlinks, submodule contents, ignored files, and untracked files MUST NOT be
+treated as pinned source context.
+
+Narrow read-only Git checks using `rev-parse`, `status`, `ls-files`, and `ls-tree`
+MAY establish identity, cleanliness, tracked paths, and regular-file modes.
+Explicit `<full-commit>:<path>` blob reads with `git show` MAY supply context at
+the recorded head, base, or an explicitly pinned companion repository commit.
+Companion source MUST record its repository and full commit independently and
+MUST NOT substitute a moving branch for that commit. These operations MUST obey
+the Git configuration-isolation rules below and disable pagers, hooks,
+filesystem-monitor commands, external diff, and text conversion. They MUST NOT
+execute reviewed content.
+
+These source-context operations remain subject to existing tool permissions.
+This exception MUST NOT add automatic shell allowlist entries or authorize
+rerouting to bypass a denial. A failed identity, path, or cleanliness check MUST
+stop reliance on the affected context until it is reverified and reinspected.
+
+Supplemental citations MUST identify the repository, full commit, path, and
+line range. Reviewers MAY include them in review prose or a finding's existing
+`explanation` field. They MUST NOT represent them as hash-covered bundle artifacts
+or insert them into `evidenceReferences`, which continue to reference verified
+bundle artifacts only. The immutable bundle inventory, required finding
+references, changed-hunk location checks, and publication checks remain in force.
+An offline reviewer without the cited source MUST report the resulting coverage
+gap.
 
 ## Findings and offline review
 
@@ -306,9 +345,10 @@ evidence references change. Duplicate IDs MUST make the findings document
 invalid.
 
 The offline sequence is: sync an exact-head worktree, collect and verify one
-bundle, inspect the immutable bundle through the fixed views, produce schema-valid
-findings tied to its head, inspect a preview, then rerun with `--confirm` only
-after accepting that exact preview.
+bundle, inspect the immutable bundle through the fixed views, supplement with
+pinned source context when needed and available, produce schema-valid findings
+tied to its head, inspect a preview, then rerun with `--confirm` only after
+accepting that exact preview.
 
 ## Publication
 
@@ -380,4 +420,6 @@ repository code. It MUST NOT become a generic GitHub API or CI wrapper. Any
 future transport, including MCP, MUST preserve these command contracts, evidence
 format, preview and confirmation boundary, stale-head protection, and
 COMMENT-only publication rule. It MUST NOT create an alternate evidence or write
+path. Supplemental pinned source inspection is the explicit reviewer-context
+exception described above; it does not create an alternate bundle or publication
 path.
