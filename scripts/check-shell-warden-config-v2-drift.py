@@ -64,7 +64,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
         grammar, source_name = _read_source(options)
         expected = options.snapshot.read_text(encoding="utf-8")
         _ = parse_snapshot(expected)
-        actual = normalize_grammar(grammar)
+        actual = normalize_grammar(grammar, expected.splitlines()[0])
     except (GrammarError, OSError, UnicodeError) as error:
         print(f"shell-warden config v2 grammar check failed: {error}", file=sys.stderr)
         return 2

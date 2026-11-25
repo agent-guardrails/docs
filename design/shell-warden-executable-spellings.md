@@ -1,7 +1,9 @@
 # Exact executable spellings and installation paths
 
-Status: selected implementation design; not yet the shipped normative contract.
+Status: implemented by the coordinated contract and engine changes linked below.
 Tracking: https://github.com/agent-guardrails/docs/issues/46
+Implementation: https://github.com/agent-guardrails/shell-warden/issues/73
+Contract synchronization: https://github.com/agent-guardrails/docs/issues/51
 Originating discussion: https://github.com/agent-guardrails/shell-warden/issues/71
 Decision: https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md
 
@@ -207,8 +209,10 @@ envelope or public semantic-name field is required.
 
 ## Breaking disposition
 
-Keep the existing v2 document shape and replace its executable-list semantics
-in the implementing release. One checker validates one rule set:
+Apply the executable-list semantics to the active v3 contract introduced by
+[ADR-0026](../adr/0026-contextual-parameter-evidence.md). ADR 0025 originally
+targeted v2; v3 landed before its implementation. Historical v2 artifacts remain
+unchanged. One checker validates one rule set:
 
 - Apply the basename-set predicate to every list. Existing bare-name catalog
   pairs pass this predicate naturally, without a legacy validation branch.
@@ -229,9 +233,8 @@ binaries reject those lists rather than emulating the new contract.
 
 ## Implementation and contract synchronization
 
-This design is an intended revision. Until implementation lands, the shipped
-normative specs and schema still describe earlier behavior. Deliver the
-following as one coordinated implementation change:
+The coordinated implementation updates the active v3 schema, normative specs,
+fixtures and engine together:
 
 | Surface | Required change |
 | --- | --- |
@@ -249,6 +252,12 @@ Schema-first validation and the other decisions in ADR 0017 remain. Disjoint
 configuration assembly in ADR 0024 remains; this change adds no per-file
 override or cross-file profile extension. Redirect-target pattern work in
 https://github.com/agent-guardrails/shell-warden/issues/72 is independent.
+
+Contextual parameter grants remain per-rule and per-part. Retaining an enrolled
+shell parent does not grant its children permission to use parameters, or the
+reverse. Unsupported wrapper forms stay opaque: `env` assignments retain known
+children for restrictions, extra shell operands are not fabricated child argv,
+and dynamic code operands cannot use ordinary argument grants.
 
 ## Verification cases
 

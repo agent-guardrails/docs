@@ -1,12 +1,16 @@
 # 08 — Decision Pipeline (checker) & Hook Application
 
-Version 3.0 · 2026-11-17 · Active v3 behavior is defined by
+Version 3.1 · 2026-11-24 · Active v3 behavior is defined by
 [ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
 [12 — Contextual parameters](12-contextual-parameters.md). The earlier v2-only transition followed
 [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md) and
 [docs issue 33](https://github.com/agent-guardrails/docs/issues/33): rules vote inside the
 binary and reduce by the fixed lattice; there is no refinement phase, first-match semantics,
 configuration-order meaning, or compatibility grammar.
+
+Exact executable selection and uniform wrapper participation follow
+[ADR-0025](https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md)
+and https://github.com/agent-guardrails/docs/issues/51.
 
 ## 8.1 Checker pipeline (per letter)
 
@@ -45,9 +49,13 @@ emits its vote.
 3. **No selected profile** ⇒ no rule of that part may run; the part reduces to the bare
    default ask, and its evidence state still contributes to the command's classification
    (§8.6).
-4. **Collapsed wrapper parts** (07 §7.2) participate only through their children.
+4. **Wrapper parents and children** (07 §7.2) MUST each select a profile by
+   exact complete decoded head and satisfy full coverage independently.
+   Basename recognition grants nothing; a missing parent profile or parent
+   allow, parent ask/deny, uncovered option/environment/redirect/nested part,
+   opacity, or overflow cannot be hidden by an allowed child.
 5. **Analyzers**: when the selected profile declares an analyzer, the analyzer inspects the
-   head token and the post-option-parsing positionals and emits facts from its closed
+   lexical basename and the post-option-parsing positionals and emits facts from its closed
    catalog. Only `xargs-v1` may additionally relabel an emitted child as an
    `analyzer-command` part (07 §7.2). Analyzers never load config code, never issue a verdict,
    and never grant a command.
@@ -142,7 +150,7 @@ full `facts` object (02 §2.10, selected by `limits.diagnosticsBytes`) records:
 |---|---|
 | `evidence` | the command's evidence state: `complete` \| `parameter` \| `opaque` \| `invalid` |
 | `reasons` | stable reason codes seen in the graph, sorted and deduplicated by UTF-8 bytes before any bounded selection |
-| `selectedProfiles` | profile ids selected by non-collapsed, non-dead parts, in part order |
+| `selectedProfiles` | profile ids selected by non-dead parts, including wrapper parents, in part order |
 | `matched` | conclusive ordinary predicate matches; for allow, profile/explicit-classification-eligible proof attempts before coverage (sorted, unique). Unknown restrictions are not matched votes. |
 | `qualified` | ids of allow rules whose coverage proof passed |
 | `rejected` | one canonical object `{ "ruleId": id, "reasons": [stable coverage codes] }` per rejected allow rule ID; each object carries all its coverage codes sorted and deduplicated by UTF-8 bytes |

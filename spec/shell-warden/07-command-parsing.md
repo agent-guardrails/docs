@@ -1,11 +1,15 @@
 # 07 — Parsing (normative for the checker)
 
-Version 3.0 · 2026-11-17 · Contextual parameter evidence follows
+Version 3.1 · 2026-11-24 · Contextual parameter evidence follows
 [ADR-0026](../../adr/0026-contextual-parameter-evidence.md) and
 [12 — Contextual parameters](12-contextual-parameters.md). The schema-first foundation was accepted by
 [ADR-0017](https://github.com/agent-guardrails/docs/blob/main/adr/0017-schema-first-shell-warden-config-contract.md) and post-schema verdict
 validation in [ADR-0023](https://github.com/agent-guardrails/docs/blob/main/adr/0023-shell-warden-verdict-v2-only.md). Parsing remains the
 checker's own and complete; harness-supplied splitting is never trusted.
+
+Executable spelling and retained-wrapper semantics follow
+[ADR-0025](https://github.com/agent-guardrails/docs/blob/main/adr/0025-explicit-same-name-executable-spellings.md)
+and https://github.com/agent-guardrails/docs/issues/51.
 
 Parsing is the checker's own (ADR-0016): one scanner turns raw command text into segments per
 operator, and a recursive extractor turns segments into the complete executable-part and
@@ -45,7 +49,7 @@ The parsed relations are a CLOSED enum:
 |---|---|
 | `chain` | Operator-bounded executable segment (the default root relation) |
 | `pipeline` | Segment following `\|` |
-| `wrapper` | Recursive unwrap of a transparent interpreter (below) — children of the wrapper part |
+| `wrapper` | Recursive extraction of command operands (below) — children of the retained wrapper part |
 | `command-substitution` | Inner text of `$(…)`, deprecated backticks, and process substitution, split recursively |
 | `analyzer-command` | MAY be emitted ONLY by an analyzer (`xargs-v1`); prevents analyzers from duplicating ordinary shell nesting |
 
@@ -54,17 +58,27 @@ Wrappers unwrap into child parts; the wrapped command evaluates on its own under
 
 | Head | Unwrap |
 |---|---|
-| `bash -c`, `sh -c` | Only the fixed literal-script form is transparent. Children use the same parser/evidence model; outer assignments and redirects remain coverage obligations. Extra operands or unsupported wrapper options keep the wrapper opaque while a known literal body still exposes restrictive children. `$0`/`$1` extras MUST NOT be appended as fabricated child argv/options. |
-| `sudo`, `nohup` | transparent: the rest of the argv becomes the child; options of the wrapper head make the part opaque; a bare wrapper head is opaque |
+| `bash -c`, `sh -c` | Only the fixed literal-script form is supported. Children use the same parser/evidence model; outer assignments and redirects remain coverage obligations. Extra operands or unsupported wrapper options keep the wrapper opaque while a known literal body still exposes restrictive children. `$0`/`$1` extras MUST NOT be appended as fabricated child argv/options. |
+| `sudo`, `nohup` | the rest of the argv becomes the child; options of the wrapper head make the part opaque; a bare wrapper head is opaque |
 | `nice` | `-n N` is skipped; other wrapper options are opaque |
 | `timeout` | the duration argument (`<n>[smhd]`) is skipped and validated; a missing or non-parsing duration is opaque |
-| `env` | A literal command without utility assignment operands/options is transparent. Utility assignments are not direct shell-prefix evidence: keep that wrapper opaque, retaining known executable children for restrictions instead of discarding destinations. |
+| `env` | A literal command without utility assignment operands/options is supported. Utility assignments are not direct shell-prefix evidence: keep that wrapper opaque, retaining known executable children for restrictions instead of discarding destinations. |
 | `xargs` | stays VISIBLE: emits the operand as an opaque child and marks itself opaque ("executes from stdin") — the child only becomes a matchable `analyzer-command` part when the selected profile runs `xargs-v1` (08 §8.4) |
 
-A wrapper part that has been unwrapped ("collapsed") carries no votes, no selected profile,
-and contributes no independent evidence of its own — its children carry the execution
-semantics. Collapsed parts collide with nothing: they are excluded from selection, reduction,
-and the evidence-state aggregates in one pass.
+Structural recognition MUST use one lexical basename helper for bare names and
+normalized absolute POSIX heads (06 §6.3). This supplies syntax interpretation,
+never permission: `/tmp/sh -c 'tool'` emits a shell parent and its child even if
+no profile enrolls `/tmp/sh`. Relative or irregular heads are not normalized.
+Extraction MUST NOT depend on profile selection or the chosen analyzer.
+
+Every executable wrapper MUST remain a participating part with independent
+exact profile selection, votes, and complete coverage obligations. Parent argv,
+options, assignments, redirects, and nested observations MUST be retained;
+neither a child's allow nor its profile is inherited by the parent, or vice
+versa. An unselected parent defaults to ask, but its discovered children still
+participate, including a child's deny. Unsupported forms and dynamic operands
+retain their existing opacity; an installation path does not resolve them.
+All parents and children count toward recursion and evidence budgets.
 
 Command substitution children emit BEFORE (in evaluation order of) the surrounding part.
 Shell and nested-part depth is bounded at 32; exceeding that bound makes affected evidence
@@ -149,8 +163,9 @@ exact values are not part of the contract.
 
 - **Environment assignments**: a leading word shaped `NAME=VALUE` (identifier name) before any
   argv token is recorded as an environment assignment (occurrence, name, literal value, span,
-  prefix position) and excluded from argv. `env` wrapper assignments behave as transparent
-  prefixes.
+  prefix position) and excluded from argv. `env` assignment operands remain
+  observable parent arguments while child extraction skips them; leading
+  assignments remain environment evidence.
 - **Redirect records**: the scanner emits one typed record per redirect occurrence, in source
   order, with operator, source FD, and typed target. Digits immediately before the operator
   are the source FD (`2>`); absent digits mean the operator's default FD.

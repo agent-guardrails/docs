@@ -48,11 +48,18 @@ config.title = "Shell Warden configuration v3";
 config.$comment = "Active contextual parameter contract. v2 is historical; no compatibility reader.";
 const d = config.$defs;
 d.Config.properties.version.const = 3;
+d.ExecutableSpelling = {
+  type: "string", minLength: 1, maxLength: 4096,
+  pattern: "^(?:[^/\\u0000-\\u001f\\u007f]+|/(?:[^/\\u0000-\\u001f\\u007f]+/)*[^/\\u0000-\\u001f\\u007f]+)$",
+  not: { pattern: "[\\u0000-\\u001f\\u007f]|(?:^|/)\\.\\.?(?:/|$)" },
+  $comment: "Exact bare name or normalized absolute POSIX spelling; never expanded or normalized. Semantic validation also enforces 4096 UTF-8 bytes, a singleton distinct-basename set or exactly one complete catalog group (node/nodejs or python/python3), unique full-spelling ownership across assembled files, analyzer compatibility for every basename, and bare-only export bindings (ADR 0025).",
+};
+d.Profile.properties.executables.items = { $ref: "#/$defs/ExecutableSpelling" };
 d.VariableName = { type: "string", minLength: 1, maxLength: 128, pattern: "^[A-Za-z_][A-Za-z0-9_]*$" };
 d.VariableNames = { type: "array", maxItems: 64, uniqueItems: true, items: { $ref: "#/$defs/VariableName" } };
 d.ExpansionPermissions = {
   type: "object",
-  description: "Rule-local context grants do not authorize dynamic executable or code operands. Known wrapper/interpreter blocking uses literal basenames, including path spellings. Nonliteral awk operands remain opaque without a program-role analyzer, even after --. See spec/shell-warden/12-contextual-parameters.md.",
+  description: "Rule-local context grants do not authorize dynamic executable or code operands. Known wrapper/interpreter blocking uses the shared lexical basename for valid bare names and normalized absolute spellings; relative/irregular heads cannot select a profile. Nonliteral awk operands remain opaque without a program-role analyzer, even after --. See spec/shell-warden/12-contextual-parameters.md.",
   additionalProperties: false,
   properties: Object.fromEntries(["arguments", "redirectTargets", "assignmentValues"].map((name) => [
     name, { $ref: "#/$defs/VariableNames" },
@@ -135,12 +142,12 @@ const configBase = {
   }],
 };
 const configFixtures = [];
-function configVector(name, valid, mutate) {
+function configVector(name, valid, mutate, schemaValid = valid) {
   const value = structuredClone(configBase);
   mutate(value, value.profiles[0].rules[0]);
   const relative = `${valid ? "valid" : "invalid"}/${name}.json`;
   emit(`schemas/fixtures/shell-warden.config.v3/${relative}`, value);
-  configFixtures.push({ path: relative, valid });
+  configFixtures.push({ path: relative, valid, ...(schemaValid !== valid ? { schemaValid } : {}) });
 }
 configVector("argument-home", true, () => {});
 configVector("empty-contexts", true, (_c, r) => { r.expansions = { arguments: [], redirectTargets: [], assignmentValues: [] }; });
@@ -173,6 +180,46 @@ for (const [operator, valid] of [[">", true], [">>", true], ["<", false], [">&",
     };
     r.expansions.redirectTargets = ["HOME"];
   });
+}
+// ADR 0025 belongs to the active v3 contract after ADR 0026 landed.
+// Semantic-only rejections stay schema-valid and are rejected by the checker.
+for (const [name, executables, valid, schemaValid = valid, analyzer] of [
+  ["same-name-paths", ["tool", "/opt/tool", "/home/user/tool"], true],
+  ["paths-only", ["/opt/tool", "/home/user/tool"], true],
+  ["node-alias-paths", ["node", "/opt/node", "/usr/bin/nodejs"], true],
+  ["python-alias-paths", ["/opt/python", "/usr/bin/python3"], true],
+  ["literal-unicode-spaces", ["工具", "/a b/工具"], true],
+  ["literal-wildcards", ["*", "/opt/*"], true],
+  ["literal-backslashes", ["c:\\tool", "/opt/c:\\tool"], true],
+  ["absolute-sed", ["/opt/sed"], true, true, "sed-v1"],
+  ["absolute-xargs", ["/opt/xargs"], true, true, "xargs-v1"],
+  ["bare-export", ["export"], true, true, "export-v1"],
+  ["empty-list", [], false],
+  ["empty-spelling", [""], false],
+  ["relative-head", ["./tool"], false],
+  ["relative-directory", ["opt/tool"], false],
+  ["root-only", ["/"], false],
+  ["bare-dot", ["."], false],
+  ["empty-component", ["/opt//tool"], false],
+  ["dot-component", ["/opt/./tool"], false],
+  ["parent-component", ["/opt/../tool"], false],
+  ["trailing-slash", ["/opt/tool/"], false],
+  ["ascii-control", ["to\u007fol"], false],
+  ["terminal-newline", ["tool\n"], false],
+  ["duplicate-spelling", ["tool", "tool"], false],
+  ["unrelated-basenames", ["tool", "/opt/other"], false, true],
+  ["union-alias-groups", ["node", "nodejs", "python", "python3"], false, true],
+  ["incompatible-sed", ["tool"], false, true, "sed-v1"],
+  ["incompatible-xargs", ["tool"], false, true, "xargs-v1"],
+  ["incompatible-export", ["tool"], false, true, "export-v1"],
+  ["path-export-generic", ["/opt/export"], false, true],
+  ["path-export-specialized", ["export", "/opt/export"], false, true, "export-v1"],
+  ["utf8-byte-boundary", ["é".repeat(2048)], true],
+  ["utf8-byte-overflow", ["é".repeat(2048) + "a"], false, true],
+]) {
+  configVector(`executable-${name}`, valid, (c) => {
+    c.profiles = [{ id: "enrollment", executables, options: {}, analyzer: analyzer ?? "generic-v1", rules: [] }];
+  }, schemaValid);
 }
 emit("schemas/fixtures/shell-warden.config.v3/manifest.json", { fixtures: configFixtures });
 
