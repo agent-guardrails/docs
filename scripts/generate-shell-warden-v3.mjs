@@ -61,10 +61,11 @@ d.ExpansionPermissions = {
   type: "object",
   description: "Rule-local context grants do not authorize dynamic executable or code operands. Known wrapper/interpreter blocking uses the shared lexical basename for valid bare names and normalized absolute spellings; relative/irregular heads cannot select a profile. Nonliteral awk operands remain opaque without a program-role analyzer, even after --. See spec/shell-warden/12-contextual-parameters.md.",
   additionalProperties: false,
-  properties: Object.fromEntries(["arguments", "redirectTargets", "assignmentValues"].map((name) => [
+  properties: Object.fromEntries(["arguments", "optionValues", "redirectTargets", "assignmentValues"].map((name) => [
     name, { $ref: "#/$defs/VariableNames" },
   ])),
 };
+d.ExpansionPermissions.properties.optionValues.description = "Independent rule-local grant for supported wholly double-quoted parameters in declared fixed-arity option values. Runtime-value and path constraints remain unproven; code and wrapper operands are not authorized.";
 d.AllowRule.properties.expansions = { $ref: "#/$defs/ExpansionPermissions" };
 d.AllowMatch.required = d.AllowMatch.required.filter((key) => key !== "classification");
 d.AllowMatch.properties.classification = { enum: ["complete", "parameter"] };
@@ -150,9 +151,28 @@ function configVector(name, valid, mutate, schemaValid = valid) {
   configFixtures.push({ path: relative, valid, ...(schemaValid !== valid ? { schemaValid } : {}) });
 }
 configVector("argument-home", true, () => {});
-configVector("empty-contexts", true, (_c, r) => { r.expansions = { arguments: [], redirectTargets: [], assignmentValues: [] }; });
+configVector("empty-contexts", true, (_c, r) => { r.expansions = { arguments: [], optionValues: [], redirectTargets: [], assignmentValues: [] }; });
 configVector("no-grant", true, (_c, r) => { delete r.expansions; });
-configVector("independent-contexts", true, (_c, r) => { r.expansions = { arguments: ["HOME"], redirectTargets: ["TMPDIR"], assignmentValues: ["CACHE", "_HOME2"] }; });
+configVector("independent-contexts", true, (_c, r) => { r.expansions = { arguments: ["HOME"], optionValues: ["CONFIG"], redirectTargets: ["TMPDIR"], assignmentValues: ["CACHE", "_HOME2"] }; });
+configVector("option-value-home", true, (c, r) => {
+  c.profiles[0].pathSources = [];
+  c.profiles[0].options = { config: { aliases: ["--config", "-c"], arity: 1, inline: true } };
+  r.expansions = { optionValues: ["HOME"] };
+  r.match.arguments = { exact: ["list"] };
+  r.match.options = { allowed: [{ option: "config", required: true, repeatable: false, values: { each: { any: true } } }] };
+  r.match.paths = { none: true };
+});
+configVector("option-value-boundary", true, (_c, r) => { r.expansions = { optionValues: Array.from({ length: 64 }, (_, i) => `VAR_${i}`) }; });
+for (const [name, value] of [
+  ["null", null], ["wrong-type", "HOME"], ["duplicate", ["HOME", "HOME"]],
+  ["wildcard", ["H*"]], ["name-over-bound", ["H".repeat(129)]],
+  ["count-over-bound", Array.from({ length: 65 }, (_, i) => `VAR_${i}`)],
+]) {
+  configVector(`option-value-${name}`, false, (_c, r) => { r.expansions = { optionValues: value }; });
+}
+for (const action of ["ask", "deny"]) {
+  configVector(`option-value-${action}`, false, (_c, r) => { r.action = action; r.expansions = { optionValues: [] }; });
+}
 configVector("classifier-parameter", true, (_c, r) => { r.match.classification = "parameter"; });
 configVector("classifier-complete", true, (_c, r) => { r.match.classification = "complete"; });
 configVector("selector-count-boundary", true, (_c, r) => { r.expansions.arguments = Array.from({ length: 64 }, (_, i) => `VAR_${i}`); });

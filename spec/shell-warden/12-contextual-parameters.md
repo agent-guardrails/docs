@@ -1,8 +1,11 @@
 # 12 — Contextual parameters: configuration and verdict v3
 
-Version 3.1 · 2026-11-24
+Version 3.2 · 2026-11-28
 
 Decision: [ADR-0026](../../adr/0026-contextual-parameter-evidence.md).
+Option-value extension: [ADR-0027](../../adr/0027-option-value-parameter-grants.md),
+https://github.com/agent-guardrails/docs/issues/60 and
+https://github.com/agent-guardrails/shell-warden/issues/80.
 Feature: https://github.com/agent-guardrails/shell-warden/issues/69.
 Contract: https://github.com/agent-guardrails/docs/issues/50.
 Hook: https://github.com/agent-guardrails/opencode-shell-warden-hook/issues/27.
@@ -48,7 +51,8 @@ Shell line continuations MUST be removed before identifier tokenization without
 mistaking an escaped backslash for a continuation. Quote and escape information
 MUST be retained from original source, not reconstructed from decoded markers.
 
-Arguments and write/append redirect targets MUST be wholly double quoted.
+Arguments, supported option values, and write/append redirect targets MUST be
+wholly double quoted.
 Direct prefix assignments and the declaration form
 unquoted `export NAME=value [NAME=value ...]` also support unquoted parameter values where
 assignment semantics suppress splitting and globbing. The initial unquoted value
@@ -57,8 +61,8 @@ Quoted suffix spaces, glob characters, escaped dollar signs, and `..` are litera
 they do not prove a safe filesystem location.
 
 Operators, indirect/array/special parameters, arithmetic, substitutions, multiple
-references, malformed quoting, dynamic executable/option spellings, dynamic option
-values, and dynamic wrapper/interpreter operands do not qualify through this
+references, malformed quoting, dynamic executable/option spellings, and dynamic
+wrapper/interpreter operands do not qualify through this
 feature. Their executable children MUST NOT disappear. Redirect targets MUST use
 the same quote/expansion scanning as ordinary words. Every redirect occurrence,
 assignment destination/kind/ordinal, empty literal argument, and executable child
@@ -112,9 +116,12 @@ program source. Without a program-role analyzer, nonliteral `awk` operands MUST
 remain opaque even when an argument grant covers their variable name.
 
 With `sed-v1`, a positional program MUST remain literal; parameter file operands
-after a literal program and operand boundary can qualify. Dynamic option values
-cannot provide an alternative program proof. Declared analyzers MUST NOT silently
+after a literal program and operand boundary can qualify. Dynamic `expression`
+and `file` option values MUST remain opaque and cannot provide an alternative
+program proof. Declared analyzers MUST NOT silently
 omit their catalog merely because a configured literal spelling differs.
+Without `sed-v1`, nonliteral `sed` operands, including option values, MUST remain
+opaque rather than acquiring an unproved program/data role.
 
 Unresolved declaration destinations, including `export -- "$HOME"`, MUST remain
 unsupported even if an argument grant names HOME. An `env` utility assignment is
@@ -128,6 +135,7 @@ An allow rule MAY contain this closed `expansions` object:
 ```json
 {
   "arguments": ["HOME"],
+  "optionValues": ["HOME"],
   "redirectTargets": ["TMPDIR"],
   "assignmentValues": ["HOME", "TMPDIR"]
 }
@@ -158,6 +166,21 @@ therefore MUST occur after a literal `--` recognized as the selected profile
 grammar's operand boundary, not consumed as an option value. A boundary after the
 parameter does not suffice. Executable names and option spellings remain literal.
 
+`optionValues` independently grants names read in values consumed by declared
+fixed-arity options. It MUST NOT grant positional, assignment, redirect, executable,
+or option-name permissions; other context grants MUST NOT grant option values.
+Separate values MAY use any declared alias, fixed value ordinal, and occurrence.
+They do not require `--`, because option arity establishes the role. A consumed
+literal `--` is a value, not an operand boundary.
+
+Inline parameters MUST use a literal unquoted alias followed by `=` and a wholly
+double-quoted supported value, for example `--config="${HOME}/config.yaml"`.
+The selected profile MUST declare that alias with arity one and `inline: true`.
+Whole-word quoting, concatenated quoting, dynamic aliases, unquoted values, and
+inline values for other arities do not qualify. An inline candidate consumed as
+another option's value or appearing after the operand boundary MUST NOT be
+reinterpreted as a leading-parameter word.
+
 The checker MUST NOT read or simulate runtime variable values. A grant covers
 unset, empty, changed, non-exported shell-local, option-looking, and other values.
 Execution may fail under `nounset`; the checker does not simulate that failure.
@@ -176,11 +199,17 @@ requires an explicit `value: {"any": true}`, destination-name coverage,
 prefixes; `false` selects declaration assignments. Declaration destination facts
 from `export-v1` retain their ordinary coverage obligation.
 
+A supported option value requires its rule-local `optionValues` grant and
+`{"any": true}` at the corresponding `values.each` or `values.byPosition`
+selector. Every occurrence and value ordinal MUST remain covered; required and
+repeatable constraints are unchanged. Unresolved option path coordinates MUST
+remain observed and additionally require value-independent path coverage.
+
 Path-policy entries additionally accept `any: true` as an alternative to exactly
 one `exact`, `within`, or `outside` selector. This form is value independent.
 `any: false`, multiple selector arms, and nulls are invalid. A tracked unresolved
 coordinate MUST remain observed and requires both value-independent path coverage
-and its argument/assignment context gate. Redirect targets require their redirect
+and its argument/option-value/assignment context gate. Redirect targets require their redirect
 context gate and value-independent redirect-path coverage.
 
 The redirect target-kind catalog adds `parameterPath`. It pairs only with `>` or

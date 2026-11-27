@@ -2193,6 +2193,10 @@
         "arguments": {
           "$ref": "#/$defs/VariableNames"
         },
+        "optionValues": {
+          "$ref": "#/$defs/VariableNames",
+          "description": "Independent rule-local grant for supported wholly double-quoted parameters in declared fixed-arity option values. Runtime-value and path constraints remain unproven; code and wrapper operands are not authorized."
+        },
         "redirectTargets": {
           "$ref": "#/$defs/VariableNames"
         },
